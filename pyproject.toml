@@ -7,7 +7,7 @@ authors = [
     "Lulai Zhu <lulai.zhu@gmail.com>"
 ]
 readme = "README.md"
-homepage = "https://github.com/AutotwinEU/graph-model-generation"
+homepage = "https://github.com/AutotwinEU/graph-model-gen"
 keywords = ["auto-twin", "system discovery", "graph model"]
 classifiers = [
     "Development Status :: 1 - Planning",

@@ -1,4 +1,4 @@
-[![PyPI - License](https://img.shields.io/pypi/l/autotwin_gmglib)](https://github.com/AutotwinEU/graph-model-gen/blob/master/LICENSE)
+[![PyPI - License](https://img.shields.io/pypi/l/autotwin_gmglib)](https://github.com/AutotwinEU/graph-model-gen/blob/main/LICENSE)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/autotwin_gmglib)](https://www.python.org/downloads/)
 [![PyPI - Version](https://img.shields.io/pypi/v/autotwin_gmglib)](https://pypi.org/project/autotwin_gmglib/)
 

@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "autotwin_gmglib"
+version = "0.0.1"
+description = "Graph Model Generation Library for Auto-Twin"
+license = "BSD-3-Clause"
+authors = [
+    "Lulai Zhu <lulai.zhu@gmail.com>"
+]
+readme = "README.md"
+homepage = "https://github.com/AutotwinEU/graph-model-generation"
+keywords = ["auto-twin", "system discovery", "graph model"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only"
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+neo4j = "^5.17.0"
+pandas = "^2.2.1"
+networkx = "^3.2.1"
+pygraphviz = "^1.12"
+matplotlib = "^3.8.3"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.2.0"
+flake8 = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

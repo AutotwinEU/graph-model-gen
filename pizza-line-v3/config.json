@@ -1,0 +1,38 @@
+{
+    "name": "Pizza Line",
+    "version": "V3",
+    "work_path": "pizza-line-v3",
+    "neo4j": {
+        "uri": "neo4j://localhost:7687",
+        "username": "neo4j",
+        "password": "12345678",
+        "database": "neo4j",
+        "start_time": 0,
+        "end_time": 30000000
+    },
+    "data": {
+        "path": "log.csv",
+        "mappings": {
+            "column": {
+                "time": "time",
+                "station": "station",
+                "part": "part",
+                "type": "type",
+                "activity": "activity"
+            },
+            "activity": {
+                "ENTER": "ENTER",
+                "EXIT": "EXIT",
+                "EXIT_AP": "EXIT_AP",
+                "EXIT_AR": "EXIT_AR"
+            }
+        }
+    },
+    "model": {
+        "path": "model.json",
+        "delays": {
+            "seize": 0.0,
+            "release": 0.0
+        }
+    }
+}

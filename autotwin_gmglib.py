@@ -59,6 +59,9 @@ def export_model(model: networkx.DiGraph, config: dict[str, Any]):
     Args:
         model: Graph model.
         config: Configuration.
+
+    Returns:
+        Model ID.
     """
     uri = config["neo4j"]["uri"]
     username = config["neo4j"]["username"]
@@ -66,7 +69,8 @@ def export_model(model: networkx.DiGraph, config: dict[str, Any]):
     database = config["neo4j"]["database"]
     driver = neo4j.GraphDatabase.driver(uri, auth=(username, password))
     with driver.session(database=database) as session:
-        session.execute_write(lambda t: _write_model(t, model))
+        model_id = session.execute_write(lambda t: _write_model(t, model))
+    return model_id
 
 
 def load_log(config: dict[str, Any]) -> pandas.DataFrame:

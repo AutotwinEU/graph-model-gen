@@ -483,12 +483,13 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
     Returns:
         Model ID.
     """
-    model_label = "GraphModel:Instance"
     model_name = model.graph["name"]
+    model_version = model.graph["version"]
     model_id = transaction.run(
         f"""
-        CREATE (gm:{model_label})
-        SET gm.name = '{model_name}'
+        CREATE (gm:GraphModel:Instance)
+        SET gm.name = '{model_name}',
+            gm.version = '{model_version}'
         RETURN ID(gm) AS id
         """
     ).data()[0]["id"]
@@ -505,25 +506,22 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
         ).data()[0]["id"]
 
     for station, attributes in model.nodes.items():
+        operation = attributes["operation"]
         station_id = transaction.run(
             f"""
             MATCH (st:Station:Ensemble {{sysId: '{station}'}})
             MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+            SET st.operation = '{operation}'
             CREATE (st)-[:PART_OF]->(gm)
             RETURN ID(st) AS id
             """
         ).data()[0]["id"]
 
-        operation = attributes["operation"]
-        formulas = attributes["formulas"]
         buffer_capacities = attributes["buffer_capacities"]
-        machine_capacity = attributes["machine_capacity"]
-        processing_times = attributes["processing_times"]
         for type_, capacity in buffer_capacities.items():
-            buffer_label = "Entity:Resource:Station:Buffer"
             buffer_id = transaction.run(
                 f"""
-                CREATE (bf:{buffer_label})
+                CREATE (bf:Entity:Resource:Station:Buffer)
                 SET bf.capacity = {capacity}
                 RETURN ID(bf) AS id
                 """
@@ -550,10 +548,10 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
                 """
             )
 
-        machine_label = "Entity:Resource:Station:Machine"
+        machine_capacity = attributes["machine_capacity"]
         machine_id = transaction.run(
             f"""
-            CREATE (mc:{machine_label})
+            CREATE (mc:Entity:Resource:Station:Machine)
             SET mc.capacity = {machine_capacity}
             RETURN ID(mc) AS id
             """
@@ -573,51 +571,52 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
             """
         )
 
-        operation_label = "Entity:Resource:Station:Operation"
+        formulas = attributes["formulas"]
+        processing_times = attributes["processing_times"]
         for x in range(len(formulas)):
-            operation_id = transaction.run(
+            formula_id = transaction.run(
                 f"""
-                CREATE (op:{operation_label})
-                SET op.type = '{operation}',
-                    op.processingTimeMean = {processing_times[x]['mean']},
-                    op.processingTimeStd = {processing_times[x]['std']}
-                RETURN ID(op) AS id
+                CREATE (fm:Entity:Resource:Station:Formula)
+                SET fm.processingTimeMean = {processing_times[x]['mean']},
+                    fm.processingTimeStd = {processing_times[x]['std']}
+                RETURN ID(fm) AS id
                 """
             ).data()[0]["id"]
+
             for type_, cardinality in formulas[x]["input"].items():
                 transaction.run(
                     f"""
                     MATCH (ent:EntityType) WHERE ID(ent) = {type_ids[type_]}
-                    MATCH (op:{operation_label}) WHERE ID(op) = {operation_id}
-                    CREATE (ent)-[in:INPUT]->(op)
+                    MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
+                    CREATE (ent)-[in:INPUT]->(fm)
                     SET in.cardinality = {cardinality}
                     """
                 )
             for type_, cardinality in formulas[x]["output"].items():
                 transaction.run(
                     f"""
-                    MATCH (op:{operation_label}) WHERE ID(op) = {operation_id}
+                    MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
                     MATCH (ent:EntityType) WHERE ID(ent) = {type_ids[type_]}
-                    CREATE (op)-[ot:OUTPUT]->(ent)
+                    CREATE (fm)-[ot:OUTPUT]->(ent)
                     SET ot.cardinality = {cardinality}
                     """
                 )
+
             transaction.run(
                 f"""
                 MATCH (st:Station:Ensemble) WHERE ID(st) = {station_id}
-                MATCH (op:{operation_label}) WHERE ID(op) = {operation_id}
-                CREATE (st)-[:PERFORMS]->(op)
+                MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
+                CREATE (st)-[:APPLIES]->(fm)
                 """
             )
             transaction.run(
                 f"""
-                MATCH (op:{operation_label}) WHERE ID(op) = {operation_id}
+                MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
                 MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
-                CREATE (op)-[:PART_OF]->(gm)
+                CREATE (fm)-[:PART_OF]->(gm)
                 """
             )
 
-    route_label = "Entity:Resource:Connection:Route"
     for connection, attributes in model.edges.items():
         connection_id = transaction.run(
             f"""
@@ -635,7 +634,7 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
         for type_ in routing_probabilities.keys():
             route_id = transaction.run(
                 f"""
-                CREATE (rt:{route_label})
+                CREATE (rt:Entity:Resource:Connection:Route)
                 SET rt.probability = {routing_probabilities[type_]},
                     rt.transferTimeMean = {transfer_times[type_]['mean']},
                     rt.transferTimeStd = {transfer_times[type_]['std']}

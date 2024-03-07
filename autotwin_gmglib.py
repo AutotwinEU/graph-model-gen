@@ -135,7 +135,7 @@ def generate_model(log: pandas.DataFrame, config: dict[str, Any]) -> networkx.Di
     traces = _collect_traces(part_sublogs, station_sublogs, log)
     _mine_topology(model, traces, log)
     _identify_operation(model, part_sublogs, station_sublogs, log)
-    _mine_formulas(model, part_sublogs, station_sublogs, log, config)
+    _mine_formulas(model, part_sublogs, station_sublogs, log)
     window = [-1, len(log) - 1]
     _reconstruct_states(model, part_sublogs, station_sublogs, log, window)
     _mine_capacities(model, log, window)
@@ -842,7 +842,6 @@ def _mine_formulas(
     part_sublogs: dict[str, pandas.DataFrame],
     station_sublogs: dict[str, pandas.DataFrame],
     log: pandas.DataFrame,
-    config: dict[str, Any],
 ):
     """Mine the input-output formulas at each station.
 
@@ -851,7 +850,6 @@ def _mine_formulas(
         part_sublogs: Part sublogs.
         station_sublogs: Station sublogs.
         log: Event log.
-        config: Configuration.
     """
     log["input"] = None
     log["output"] = None

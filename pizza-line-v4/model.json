@@ -1,0 +1,1530 @@
+{
+    "directed": true,
+    "multigraph": false,
+    "graph": [
+        [
+            "name",
+            "Pizza Line"
+        ],
+        [
+            "version",
+            "V4"
+        ],
+        [
+            "types",
+            [
+                "PAL",
+                "PZ_1000",
+                "BOX",
+                "PACK_1000",
+                "BOX_1000",
+                "PAL_1000",
+                "PZ_1010",
+                "PACK_1010",
+                "BOX_1010",
+                "PAL_1010",
+                "PZ_1020",
+                "PACK_1020",
+                "BOX_1020",
+                "PAL_1020",
+                "PZ_1030",
+                "PACK_1030",
+                "BOX_1030",
+                "PAL_1030"
+            ]
+        ],
+        [
+            "time_spent",
+            52.35652017593384
+        ]
+    ],
+    "nodes": [
+        {
+            "is_source": true,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PAL": 1
+                    },
+                    "output": {
+                        "PAL": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PAL": 0
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 5463446.485714285,
+                    "std": 3475856.9277108912
+                }
+            ],
+            "id": "PalletSource"
+        },
+        {
+            "is_source": true,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PZ_1000": 1
+                    },
+                    "output": {
+                        "PZ_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1010": 1
+                    },
+                    "output": {
+                        "PZ_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 1
+                    },
+                    "output": {
+                        "PZ_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1030": 1
+                    },
+                    "output": {
+                        "PZ_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PZ_1000": 0,
+                "PZ_1010": 0,
+                "PZ_1020": 0,
+                "PZ_1030": 0
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 62218.76204379569,
+                    "std": 416094.9579640792
+                },
+                {
+                    "mean": 43800.042245370445,
+                    "std": 158765.55031177134
+                },
+                {
+                    "mean": 46790.152777777796,
+                    "std": 139668.6219925546
+                },
+                {
+                    "mean": 43842.59876543211,
+                    "std": 138889.0686731177
+                }
+            ],
+            "id": "PizzaSource"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "ATTACH",
+            "formulas": [
+                {
+                    "input": {
+                        "PAL": 1,
+                        "BOX_1000": 12
+                    },
+                    "output": {
+                        "PAL_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PAL": 1,
+                        "BOX_1010": 12
+                    },
+                    "output": {
+                        "PAL_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PAL": 1,
+                        "BOX_1020": 12
+                    },
+                    "output": {
+                        "PAL_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PAL": 1,
+                        "BOX_1030": 12
+                    },
+                    "output": {
+                        "PAL_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PAL": 1,
+                "BOX_1000": 1,
+                "BOX_1010": 1,
+                "BOX_1020": 1,
+                "BOX_1030": 1
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 200558.77777777778,
+                    "std": 275198.0275005517
+                },
+                {
+                    "mean": 124504.91666666666,
+                    "std": 192110.08089845415
+                },
+                {
+                    "mean": 184470.5,
+                    "std": 282381.14549080643
+                },
+                {
+                    "mean": 151111.77777777778,
+                    "std": 207666.0788102969
+                }
+            ],
+            "id": "PalletStation"
+        },
+        {
+            "is_source": true,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "BOX": 1
+                    },
+                    "output": {
+                        "BOX": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "BOX": 0
+            },
+            "machine_capacity": 88,
+            "processing_times": [
+                {
+                    "mean": 8955539.43430657,
+                    "std": 6037830.743897924
+                }
+            ],
+            "id": "NewBoxWarehouse"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PZ_1000": 1
+                    },
+                    "output": {
+                        "PZ_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1010": 1
+                    },
+                    "output": {
+                        "PZ_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 1
+                    },
+                    "output": {
+                        "PZ_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1030": 1
+                    },
+                    "output": {
+                        "PZ_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PZ_1000": 11,
+                "PZ_1010": 20,
+                "PZ_1020": 10,
+                "PZ_1030": 24
+            },
+            "machine_capacity": 21,
+            "processing_times": [
+                {
+                    "mean": 424125.30191458005,
+                    "std": 1199315.654251686
+                },
+                {
+                    "mean": 309190.7262731473,
+                    "std": 698790.0537826546
+                },
+                {
+                    "mean": 298718.9004629629,
+                    "std": 412247.4338359339
+                },
+                {
+                    "mean": 333096.74459876545,
+                    "std": 730963.9466162013
+                }
+            ],
+            "id": "Oven"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PZ_1000": 1
+                    },
+                    "output": {
+                        "PZ_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1010": 1
+                    },
+                    "output": {
+                        "PZ_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 1
+                    },
+                    "output": {
+                        "PZ_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1030": 1
+                    },
+                    "output": {
+                        "PZ_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PZ_1000": 6,
+                "PZ_1010": 11,
+                "PZ_1020": 6,
+                "PZ_1030": 13
+            },
+            "machine_capacity": 121,
+            "processing_times": [
+                {
+                    "mean": 2941736.690789473,
+                    "std": 3097210.1735979617
+                },
+                {
+                    "mean": 2357497.1771630375,
+                    "std": 2350802.724077508
+                },
+                {
+                    "mean": 2462031.73130841,
+                    "std": 2186367.4303917917
+                },
+                {
+                    "mean": 2516423.5880031576,
+                    "std": 2408742.0956207695
+                }
+            ],
+            "id": "Freezer"
+        },
+        {
+            "is_source": false,
+            "is_sink": true,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PZ_1000": 1
+                    },
+                    "output": {
+                        "PZ_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1010": 1
+                    },
+                    "output": {
+                        "PZ_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 1
+                    },
+                    "output": {
+                        "PZ_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1030": 1
+                    },
+                    "output": {
+                        "PZ_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PZ_1000": 3,
+                "PZ_1010": 5,
+                "PZ_1020": 1,
+                "PZ_1030": 7
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                }
+            ],
+            "id": "DefectPizzaSink"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "COMPOSE",
+            "formulas": [
+                {
+                    "input": {
+                        "PZ_1000": 3
+                    },
+                    "output": {
+                        "PACK_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1010": 7
+                    },
+                    "output": {
+                        "PACK_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1010": 3,
+                        "PZ_1020": 1
+                    },
+                    "output": {
+                        "PACK_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 3
+                    },
+                    "output": {
+                        "PACK_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1030": 8
+                    },
+                    "output": {
+                        "PACK_1030": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1030": 3,
+                        "PZ_1000": 1
+                    },
+                    "output": {
+                        "PACK_1030": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1000": 1,
+                        "PZ_1010": 2
+                    },
+                    "output": {
+                        "PACK_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 1,
+                        "PZ_1030": 1
+                    },
+                    "output": {
+                        "PACK_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 1
+                    },
+                    "output": {
+                        "PACK_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1000": 1
+                    },
+                    "output": {
+                        "PACK_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PZ_1000": 8,
+                "PZ_1010": 16,
+                "PZ_1020": 8,
+                "PZ_1030": 20
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 15531.672897196255,
+                    "std": 10582.457715875573
+                },
+                {
+                    "mean": 31312.691943127942,
+                    "std": 9045.960622127672
+                },
+                {
+                    "mean": 24267.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 15021.023696682456,
+                    "std": 9115.966195658484
+                },
+                {
+                    "mean": 33097.02229299363,
+                    "std": 8328.59693794657
+                },
+                {
+                    "mean": 24581.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 83739.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 12571.5,
+                    "std": 4700.138774546981
+                },
+                {
+                    "mean": 13184.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 34584.0,
+                    "std": 0.0
+                }
+            ],
+            "id": "PackStation"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "ATTACH",
+            "formulas": [
+                {
+                    "input": {
+                        "PACK_1000": 6,
+                        "BOX": 1
+                    },
+                    "output": {
+                        "BOX_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PACK_1010": 6,
+                        "BOX": 1
+                    },
+                    "output": {
+                        "BOX_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PACK_1020": 6,
+                        "BOX": 1
+                    },
+                    "output": {
+                        "BOX_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PACK_1030": 6,
+                        "BOX": 1
+                    },
+                    "output": {
+                        "BOX_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PACK_1000": 8,
+                "BOX": 1,
+                "PACK_1010": 8,
+                "PACK_1020": 8,
+                "PACK_1030": 8
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 14315.735849056606,
+                    "std": 6465.045666692301
+                },
+                {
+                    "mean": 15136.785714285717,
+                    "std": 12515.320437431597
+                },
+                {
+                    "mean": 13415.942857142856,
+                    "std": 2863.567977524675
+                },
+                {
+                    "mean": 14514.442307692314,
+                    "std": 9342.890840568312
+                }
+            ],
+            "id": "BoxStation"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PAL_1000": 1
+                    },
+                    "output": {
+                        "PAL_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1010": 1
+                    },
+                    "output": {
+                        "PAL_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1020": 1
+                    },
+                    "output": {
+                        "PAL_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1030": 1
+                    },
+                    "output": {
+                        "PAL_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PAL_1000": 1,
+                "PAL_1010": 1,
+                "PAL_1020": 1,
+                "PAL_1030": 1
+            },
+            "machine_capacity": 3,
+            "processing_times": [
+                {
+                    "mean": 8358090.5,
+                    "std": 8252608.135364093
+                },
+                {
+                    "mean": 10472478.416666666,
+                    "std": 4842247.896259667
+                },
+                {
+                    "mean": 8083418.833333333,
+                    "std": 5972764.905965324
+                },
+                {
+                    "mean": 8630126.77777778,
+                    "std": 5014221.826779825
+                }
+            ],
+            "id": "Warehouse"
+        },
+        {
+            "is_source": false,
+            "is_sink": true,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PZ_1000": 1
+                    },
+                    "output": {
+                        "PZ_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1020": 1
+                    },
+                    "output": {
+                        "PZ_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1010": 1
+                    },
+                    "output": {
+                        "PZ_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PZ_1030": 1
+                    },
+                    "output": {
+                        "PZ_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PZ_1000": 1,
+                "PZ_1020": 1,
+                "PZ_1010": 2,
+                "PZ_1030": 2
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                }
+            ],
+            "id": "PizzaSink"
+        },
+        {
+            "is_source": false,
+            "is_sink": true,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "PACK_1000": 1
+                    },
+                    "output": {
+                        "PACK_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PACK_1010": 1
+                    },
+                    "output": {
+                        "PACK_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PACK_1020": 1
+                    },
+                    "output": {
+                        "PACK_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "PACK_1030": 1
+                    },
+                    "output": {
+                        "PACK_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PACK_1000": 2,
+                "PACK_1010": 2,
+                "PACK_1020": 2,
+                "PACK_1030": 2
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                }
+            ],
+            "id": "PackSink"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "DECOMPOSE",
+            "formulas": [
+                {
+                    "input": {
+                        "PAL_1000": 1
+                    },
+                    "output": {
+                        "BOX_1000": 33
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1010": 1
+                    },
+                    "output": {
+                        "BOX_1010": 3
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1020": 1
+                    },
+                    "output": {
+                        "BOX_1020": 7,
+                        "BOX_1010": 9
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1020": 1
+                    },
+                    "output": {
+                        "BOX_1020": 2
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1030": 1
+                    },
+                    "output": {
+                        "BOX_1020": 2
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1030": 1
+                    },
+                    "output": {
+                        "BOX_1030": 4
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1000": 1
+                    },
+                    "output": {
+                        "BOX_1000": 4,
+                        "BOX_1030": 5
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1010": 1
+                    },
+                    "output": {
+                        "BOX_1010": 2,
+                        "BOX_1000": 6
+                    }
+                },
+                {
+                    "input": {
+                        "PAL_1030": 1
+                    },
+                    "output": {
+                        "BOX_1030": 7,
+                        "BOX_1020": 2
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "PAL_1000": 3,
+                "PAL_1010": 3,
+                "PAL_1020": 1,
+                "PAL_1030": 3
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 3220.5,
+                    "std": 706.399674405361
+                },
+                {
+                    "mean": 3095.625,
+                    "std": 1995.3965547515327
+                },
+                {
+                    "mean": 1053.3333333333333,
+                    "std": 577.3502691896257
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 2920.6,
+                    "std": 1303.7255462711469
+                },
+                {
+                    "mean": 5720.333333333333,
+                    "std": 3463.8129760905585
+                },
+                {
+                    "mean": 720.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 3721.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 1720.0,
+                    "std": 0.0
+                }
+            ],
+            "id": "Market"
+        },
+        {
+            "is_source": false,
+            "is_sink": true,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "BOX_1000": 1
+                    },
+                    "output": {
+                        "BOX_1000": 1
+                    }
+                },
+                {
+                    "input": {
+                        "BOX_1010": 1
+                    },
+                    "output": {
+                        "BOX_1010": 1
+                    }
+                },
+                {
+                    "input": {
+                        "BOX_1020": 1
+                    },
+                    "output": {
+                        "BOX_1020": 1
+                    }
+                },
+                {
+                    "input": {
+                        "BOX_1030": 1
+                    },
+                    "output": {
+                        "BOX_1030": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "BOX_1000": 8,
+                "BOX_1010": 9,
+                "BOX_1020": 7,
+                "BOX_1030": 7
+            },
+            "machine_capacity": 1,
+            "processing_times": [
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                },
+                {
+                    "mean": 0.0,
+                    "std": 0.0
+                }
+            ],
+            "id": "MarketBoxSink"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "BOX_1000": 1
+                    },
+                    "output": {
+                        "BOX": 1
+                    }
+                },
+                {
+                    "input": {
+                        "BOX_1010": 1
+                    },
+                    "output": {
+                        "BOX": 1
+                    }
+                },
+                {
+                    "input": {
+                        "BOX_1030": 1
+                    },
+                    "output": {
+                        "BOX": 1
+                    }
+                },
+                {
+                    "input": {
+                        "BOX_1020": 1
+                    },
+                    "output": {
+                        "BOX": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "BOX_1000": 24,
+                "BOX_1010": 5,
+                "BOX_1030": 5,
+                "BOX_1020": 5
+            },
+            "machine_capacity": 5,
+            "processing_times": [
+                {
+                    "mean": 8413.800000000001,
+                    "std": 182.67559337194723
+                },
+                {
+                    "mean": 8594.714285714286,
+                    "std": 426.1251944190596
+                },
+                {
+                    "mean": 8630.5,
+                    "std": 463.21886218688735
+                },
+                {
+                    "mean": 8546.833333333334,
+                    "std": 408.65653875432673
+                }
+            ],
+            "id": "RefurbishProcess"
+        },
+        {
+            "is_source": false,
+            "is_sink": false,
+            "operation": "ORDINARY",
+            "formulas": [
+                {
+                    "input": {
+                        "BOX": 1
+                    },
+                    "output": {
+                        "BOX": 1
+                    }
+                }
+            ],
+            "buffer_capacities": {
+                "BOX": 15
+            },
+            "machine_capacity": 24,
+            "processing_times": [
+                {
+                    "mean": 2400238.2586206896,
+                    "std": 2784483.0890532685
+                }
+            ],
+            "id": "RefurbishedBoxWarehouse"
+        }
+    ],
+    "adjacency": [
+        [
+            {
+                "routing_probabilities": {
+                    "PAL": 1.0
+                },
+                "transfer_times": {
+                    "PAL": {
+                        "mean": 0.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "PalletStation"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "PZ_1000": 1.0,
+                    "PZ_1010": 1.0,
+                    "PZ_1020": 1.0,
+                    "PZ_1030": 1.0
+                },
+                "transfer_times": {
+                    "PZ_1000": {
+                        "mean": 524776.1858407083,
+                        "std": 1318276.669342117
+                    },
+                    "PZ_1010": {
+                        "mean": 378920.6076388902,
+                        "std": 732299.6061253467
+                    },
+                    "PZ_1020": {
+                        "mean": 368436.04398148134,
+                        "std": 446597.9487554606
+                    },
+                    "PZ_1030": {
+                        "mean": 398068.1435185181,
+                        "std": 716758.4509697269
+                    }
+                },
+                "id": "Oven"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "PAL_1000": 1.0,
+                    "PAL_1010": 1.0,
+                    "PAL_1020": 1.0,
+                    "PAL_1030": 1.0
+                },
+                "transfer_times": {
+                    "PAL_1000": {
+                        "mean": 41109.0,
+                        "std": 0.0
+                    },
+                    "PAL_1010": {
+                        "mean": 41109.0,
+                        "std": 0.0
+                    },
+                    "PAL_1020": {
+                        "mean": 41109.0,
+                        "std": 0.0
+                    },
+                    "PAL_1030": {
+                        "mean": 41109.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "Warehouse"
+            },
+            {
+                "routing_probabilities": {
+                    "BOX_1010": 1.0,
+                    "BOX_1030": 1.0,
+                    "BOX_1020": 1.0,
+                    "BOX_1000": 1.0
+                },
+                "transfer_times": {
+                    "BOX_1010": {
+                        "mean": 248360.0,
+                        "std": 0.0
+                    },
+                    "BOX_1030": {
+                        "mean": 248360.0,
+                        "std": 0.0
+                    },
+                    "BOX_1020": {
+                        "mean": 248360.0,
+                        "std": 0.0
+                    },
+                    "BOX_1000": {
+                        "mean": 248360.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "RefurbishProcess"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "BOX": 1.0
+                },
+                "transfer_times": {
+                    "BOX": {
+                        "mean": 0.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "BoxStation"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "PZ_1000": 0.05286343612334802,
+                    "PZ_1010": 0.01678240740740741,
+                    "PZ_1020": 0.009259259259259259,
+                    "PZ_1030": 0.022376543209876542
+                },
+                "transfer_times": {
+                    "PZ_1000": {
+                        "mean": 64378.91666666667,
+                        "std": 1227.53202751351
+                    },
+                    "PZ_1010": {
+                        "mean": 72173.5172413793,
+                        "std": 1497.9965339624584
+                    },
+                    "PZ_1020": {
+                        "mean": 64226.0,
+                        "std": 23.280893453646048
+                    },
+                    "PZ_1030": {
+                        "mean": 73164.41379310343,
+                        "std": 93.51528417528375
+                    }
+                },
+                "id": "DefectPizzaSink"
+            },
+            {
+                "routing_probabilities": {
+                    "PZ_1000": 0.947136563876652,
+                    "PZ_1010": 0.9832175925925926,
+                    "PZ_1020": 0.9907407407407407,
+                    "PZ_1030": 0.9776234567901234
+                },
+                "transfer_times": {
+                    "PZ_1000": {
+                        "mean": 276143.4697674418,
+                        "std": 984697.9836933989
+                    },
+                    "PZ_1010": {
+                        "mean": 199884.5497351386,
+                        "std": 582949.0698142359
+                    },
+                    "PZ_1020": {
+                        "mean": 191993.48130841117,
+                        "std": 335233.63274846855
+                    },
+                    "PZ_1030": {
+                        "mean": 220568.11444356767,
+                        "std": 643931.9871593231
+                    }
+                },
+                "id": "Freezer"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "PZ_1000": 1.0,
+                    "PZ_1010": 1.0,
+                    "PZ_1020": 1.0,
+                    "PZ_1030": 1.0
+                },
+                "transfer_times": {
+                    "PZ_1000": {
+                        "mean": 355743.8788819875,
+                        "std": 1107114.6919856837
+                    },
+                    "PZ_1010": {
+                        "mean": 377025.5576470581,
+                        "std": 1124792.6228793713
+                    },
+                    "PZ_1020": {
+                        "mean": 404687.68372092996,
+                        "std": 1261235.5962818975
+                    },
+                    "PZ_1030": {
+                        "mean": 367254.19242902193,
+                        "std": 1049531.9666149658
+                    }
+                },
+                "id": "PackStation"
+            }
+        ],
+        [],
+        [
+            {
+                "routing_probabilities": {
+                    "PACK_1000": 1.0,
+                    "PACK_1010": 1.0,
+                    "PACK_1020": 1.0,
+                    "PACK_1030": 1.0
+                },
+                "transfer_times": {
+                    "PACK_1000": {
+                        "mean": 277321.08294930885,
+                        "std": 1554306.6572861476
+                    },
+                    "PACK_1010": {
+                        "mean": 341637.57801418443,
+                        "std": 1687020.0656835749
+                    },
+                    "PACK_1020": {
+                        "mean": 375641.23611111107,
+                        "std": 1780406.4122853794
+                    },
+                    "PACK_1030": {
+                        "mean": 261283.76886792455,
+                        "std": 1433331.726365126
+                    }
+                },
+                "id": "BoxStation"
+            },
+            {
+                "routing_probabilities": {
+                    "PZ_1000": 1.0,
+                    "PZ_1020": 1.0,
+                    "PZ_1010": 1.0,
+                    "PZ_1030": 1.0
+                },
+                "transfer_times": {
+                    "PZ_1000": {
+                        "mean": 18487.0,
+                        "std": 13.114877048604
+                    },
+                    "PZ_1020": {
+                        "mean": 18476.0,
+                        "std": 14.142135623730951
+                    },
+                    "PZ_1010": {
+                        "mean": 19229.0,
+                        "std": 6.557438524302
+                    },
+                    "PZ_1030": {
+                        "mean": 19377.0,
+                        "std": 9.643650760992955
+                    }
+                },
+                "id": "PizzaSink"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "BOX_1010": 1.0,
+                    "BOX_1020": 1.0,
+                    "BOX_1000": 1.0,
+                    "BOX_1030": 1.0
+                },
+                "transfer_times": {
+                    "BOX_1010": {
+                        "mean": 17004.571428571442,
+                        "std": 6975.74715024948
+                    },
+                    "BOX_1020": {
+                        "mean": 18033.157142857148,
+                        "std": 9791.868347183363
+                    },
+                    "BOX_1000": {
+                        "mean": 17334.49056603774,
+                        "std": 7997.843375078753
+                    },
+                    "BOX_1030": {
+                        "mean": 16899.076923076933,
+                        "std": 6624.0109101446005
+                    }
+                },
+                "id": "PalletStation"
+            },
+            {
+                "routing_probabilities": {
+                    "PACK_1000": 1.0,
+                    "PACK_1010": 1.0,
+                    "PACK_1020": 1.0,
+                    "PACK_1030": 1.0
+                },
+                "transfer_times": {
+                    "PACK_1000": {
+                        "mean": 18479.0,
+                        "std": 0.0
+                    },
+                    "PACK_1010": {
+                        "mean": 18479.0,
+                        "std": 0.0
+                    },
+                    "PACK_1020": {
+                        "mean": 18479.0,
+                        "std": 0.0
+                    },
+                    "PACK_1030": {
+                        "mean": 18479.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "PackSink"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "PAL_1000": 1.0,
+                    "PAL_1010": 1.0,
+                    "PAL_1020": 1.0,
+                    "PAL_1030": 1.0
+                },
+                "transfer_times": {
+                    "PAL_1000": {
+                        "mean": 268490.0,
+                        "std": 0.0
+                    },
+                    "PAL_1010": {
+                        "mean": 268490.0,
+                        "std": 0.0
+                    },
+                    "PAL_1020": {
+                        "mean": 268490.0,
+                        "std": 0.0
+                    },
+                    "PAL_1030": {
+                        "mean": 268490.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "Market"
+            }
+        ],
+        [],
+        [],
+        [
+            {
+                "routing_probabilities": {
+                    "BOX_1000": 0.43636363636363634
+                },
+                "transfer_times": {
+                    "BOX_1000": {
+                        "mean": 457178.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "RefurbishProcess"
+            },
+            {
+                "routing_probabilities": {
+                    "BOX_1010": 1.0,
+                    "BOX_1000": 0.5636363636363636,
+                    "BOX_1020": 1.0,
+                    "BOX_1030": 1.0
+                },
+                "transfer_times": {
+                    "BOX_1010": {
+                        "mean": 15559.409090909092,
+                        "std": 0.49735027281448
+                    },
+                    "BOX_1000": {
+                        "mean": 15559.548387096775,
+                        "std": 0.5058794110203803
+                    },
+                    "BOX_1020": {
+                        "mean": 15559.350000000002,
+                        "std": 0.4893604849293828
+                    },
+                    "BOX_1030": {
+                        "mean": 15559.48148148148,
+                        "std": 0.5091750772166067
+                    }
+                },
+                "id": "MarketBoxSink"
+            }
+        ],
+        [],
+        [
+            {
+                "routing_probabilities": {
+                    "BOX": 1.0
+                },
+                "transfer_times": {
+                    "BOX": {
+                        "mean": 27999.568965517243,
+                        "std": 0.4995460734428234
+                    }
+                },
+                "id": "RefurbishedBoxWarehouse"
+            }
+        ],
+        [
+            {
+                "routing_probabilities": {
+                    "BOX": 1.0
+                },
+                "transfer_times": {
+                    "BOX": {
+                        "mean": 0.0,
+                        "std": 0.0
+                    }
+                },
+                "id": "BoxStation"
+            }
+        ]
+    ]
+}

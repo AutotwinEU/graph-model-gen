@@ -1,7 +1,8 @@
 import os
 import autotwin_gmglib as gmg
 
-config_path = os.path.join("pizza-line-v3", "config.json")
+# config_path = os.path.join("pizza-line-v3", "config.json")
+config_path = os.path.join("pizza-line-v4", "config.json")
 config = gmg.load_config(config_path)
 gmg.import_log(config)
 log = gmg.load_log(config)

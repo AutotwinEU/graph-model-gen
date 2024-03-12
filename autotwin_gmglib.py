@@ -445,10 +445,11 @@ def _read_log(
         MATCH (ev)-[:ACTS_ON]->(en:Entity)-[:IS_OF_TYPE]->(ent:EntityType)
         MATCH (ev)-[:EXECUTED_BY]->(ss:Sensor)
         WHERE ev.timestamp >= {start_time} AND ev.timestamp <= {end_time}
-        RETURN ev.timestamp AS time, st.sysId AS station,
+        RETURN toInteger(split(elementId(ev), ':')[2]) AS id,
+               ev.timestamp AS time, st.sysId AS station,
                st.type AS role, en.sysId AS part,
                ent.code AS type, ss.type AS activity
-        ORDER BY time, ID(ev)
+        ORDER BY time, id
         """
     ).data()
 
@@ -473,7 +474,10 @@ def _read_log(
     return log
 
 
-def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph) -> int:
+def _write_model(
+    transaction: neo4j.ManagedTransaction,
+    model: networkx.DiGraph
+) -> str:
     """Write a graph model to an SKG instance.
 
     Args:
@@ -490,32 +494,32 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
         CREATE (gm:GraphModel:Instance)
         SET gm.name = '{model_name}',
             gm.version = '{model_version}'
-        RETURN ID(gm) AS id
+        RETURN elementId(gm) AS eid
         """
-    ).data()[0]["id"]
+    ).data()[0]["eid"]
 
     type_ids = dict()
     for type_ in model.graph["types"]:
         type_ids[type_] = transaction.run(
             f"""
             MATCH (ent:EntityType {{code: '{type_}'}})
-            MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+            MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
             CREATE (ent)-[:PART_OF]->(gm)
-            RETURN ID(ent) AS id
+            RETURN elementId(ent) AS eid
             """
-        ).data()[0]["id"]
+        ).data()[0]["eid"]
 
     for station, attributes in model.nodes.items():
         operation = attributes["operation"]
         station_id = transaction.run(
             f"""
             MATCH (st:Station:Ensemble {{sysId: '{station}'}})
-            MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+            MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
             SET st.operation = '{operation}'
             CREATE (st)-[:PART_OF]->(gm)
-            RETURN ID(st) AS id
+            RETURN elementId(st) AS eid
             """
-        ).data()[0]["id"]
+        ).data()[0]["eid"]
 
         buffer_capacities = attributes["buffer_capacities"]
         for type_, capacity in buffer_capacities.items():
@@ -523,27 +527,27 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
                 f"""
                 CREATE (bf:Entity:Resource:Station:Buffer)
                 SET bf.capacity = {capacity}
-                RETURN ID(bf) AS id
+                RETURN elementId(bf) AS eid
                 """
-            ).data()[0]["id"]
+            ).data()[0]["eid"]
             transaction.run(
                 f"""
-                MATCH (ent:EntityType) WHERE ID(ent) = {type_ids[type_]}
-                MATCH (bf:Buffer) WHERE ID(bf) = {buffer_id}
+                MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
                 CREATE (ent)-[:OCCUPIES]->(bf)
                 """
             )
             transaction.run(
                 f"""
-                MATCH (bf:Buffer) WHERE ID(bf) = {buffer_id}
-                MATCH (st:Station:Ensemble) WHERE ID(st) = {station_id}
+                MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
+                MATCH (st:Station:Ensemble) WHERE elementId(st) = '{station_id}'
                 CREATE (bf)-[:BELONGS_TO]->(st)
                 """
             )
             transaction.run(
                 f"""
-                MATCH (bf:Buffer) WHERE ID(bf) = {buffer_id}
-                MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+                MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
+                MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
                 CREATE (bf)-[:PART_OF]->(gm)
                 """
             )
@@ -553,20 +557,20 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
             f"""
             CREATE (mc:Entity:Resource:Station:Machine)
             SET mc.capacity = {machine_capacity}
-            RETURN ID(mc) AS id
+            RETURN elementId(mc) AS eid
             """
-        ).data()[0]["id"]
+        ).data()[0]["eid"]
         transaction.run(
             f"""
-            MATCH (mc:Machine) WHERE ID(mc) = {machine_id}
-            MATCH (st:Station:Ensemble) WHERE ID(st) = {station_id}
+            MATCH (mc:Machine) WHERE elementId(mc) = '{machine_id}'
+            MATCH (st:Station:Ensemble) WHERE elementId(st) = '{station_id}'
             CREATE (mc)-[:BELONGS_TO]->(st)
             """
         )
         transaction.run(
             f"""
-            MATCH (mc:Machine) WHERE ID(mc) = {machine_id}
-            MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+            MATCH (mc:Machine) WHERE elementId(mc) = '{machine_id}'
+            MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
             CREATE (mc)-[:PART_OF]->(gm)
             """
         )
@@ -579,15 +583,15 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
                 CREATE (fm:Entity:Resource:Station:Formula)
                 SET fm.processingTimeMean = {processing_times[x]['mean']},
                     fm.processingTimeStd = {processing_times[x]['std']}
-                RETURN ID(fm) AS id
+                RETURN elementId(fm) AS eid
                 """
-            ).data()[0]["id"]
+            ).data()[0]["eid"]
 
             for type_, cardinality in formulas[x]["input"].items():
                 transaction.run(
                     f"""
-                    MATCH (ent:EntityType) WHERE ID(ent) = {type_ids[type_]}
-                    MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
+                    MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                    MATCH (fm:Formula) WHERE elementId(fm) = '{formula_id}'
                     CREATE (ent)-[in:INPUT]->(fm)
                     SET in.cardinality = {cardinality}
                     """
@@ -595,8 +599,8 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
             for type_, cardinality in formulas[x]["output"].items():
                 transaction.run(
                     f"""
-                    MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
-                    MATCH (ent:EntityType) WHERE ID(ent) = {type_ids[type_]}
+                    MATCH (fm:Formula) WHERE elementId(fm) = '{formula_id}'
+                    MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
                     CREATE (fm)-[ot:OUTPUT]->(ent)
                     SET ot.cardinality = {cardinality}
                     """
@@ -604,15 +608,15 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
 
             transaction.run(
                 f"""
-                MATCH (st:Station:Ensemble) WHERE ID(st) = {station_id}
-                MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
+                MATCH (st:Station:Ensemble) WHERE elementId(st) = '{station_id}'
+                MATCH (fm:Formula) WHERE elementId(fm) = '{formula_id}'
                 CREATE (st)-[:APPLIES]->(fm)
                 """
             )
             transaction.run(
                 f"""
-                MATCH (fm:Formula) WHERE ID(fm) = {formula_id}
-                MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+                MATCH (fm:Formula) WHERE elementId(fm) = '{formula_id}'
+                MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
                 CREATE (fm)-[:PART_OF]->(gm)
                 """
             )
@@ -623,11 +627,11 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
             MATCH (st1:Station:Ensemble {{sysId: '{connection[0]}'}})
                   -[:ORIGIN]->(cn:Connection:Ensemble)-[:DESTINATION]->
                   (st:Station:Ensemble {{sysId: '{connection[1]}'}})
-            MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+            MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
             CREATE (cn)-[:PART_OF]->(gm)
-            RETURN ID(cn) AS id
+            RETURN elementId(cn) AS eid
             """
-        ).data()[0]["id"]
+        ).data()[0]["eid"]
 
         routing_probabilities = attributes["routing_probabilities"]
         transfer_times = attributes["transfer_times"]
@@ -638,27 +642,27 @@ def _write_model(transaction: neo4j.ManagedTransaction, model: networkx.DiGraph)
                 SET rt.probability = {routing_probabilities[type_]},
                     rt.transferTimeMean = {transfer_times[type_]['mean']},
                     rt.transferTimeStd = {transfer_times[type_]['std']}
-                RETURN ID(rt) AS id
+                RETURN elementId(rt) AS eid
                 """
-            ).data()[0]["id"]
+            ).data()[0]["eid"]
             transaction.run(
                 f"""
-                MATCH (ent:EntityType) WHERE ID(ent) = {type_ids[type_]}
-                MATCH (rt:Route) WHERE ID(rt) = {route_id}
+                MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                MATCH (rt:Route) WHERE elementId(rt) = '{route_id}'
                 CREATE (ent)-[:OCCUPIES]->(rt)
                 """
             )
             transaction.run(
                 f"""
-                MATCH (rt:Route) WHERE ID(rt) = {route_id}
-                MATCH (cn:Connection:Ensemble) WHERE ID(cn) = {connection_id}
+                MATCH (rt:Route) WHERE elementId(rt) = '{route_id}'
+                MATCH (cn:Connection:Ensemble) WHERE elementId(cn) = '{connection_id}'
                 CREATE (rt)-[:BELONGS_TO]->(cn)
                 """
             )
             transaction.run(
                 f"""
-                MATCH (rt:Route) WHERE ID(rt) = {route_id}
-                MATCH (gm:GraphModel) WHERE ID(gm) = {model_id}
+                MATCH (rt:Route) WHERE elementId(rt) = '{route_id}'
+                MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
                 CREATE (rt)-[:PART_OF]->(gm)
                 """
             )

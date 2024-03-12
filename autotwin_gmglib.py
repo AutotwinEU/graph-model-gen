@@ -100,7 +100,7 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     )
     body.rename(columns=column_mappings, inplace=True)
     if "type" not in body.columns:
-        body.insert(body.columns.get_loc("part") + 1, "type", "DEFAULT")
+        body.insert(body.columns.get_loc("part") + 1, "type", "UNKNOWN")
     activity_mappings = config["data"]["mappings"]["activity"]
     original_activities = activity_mappings.keys()
     indices_to_drop = body[~body["activity"].isin(original_activities)].index

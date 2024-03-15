@@ -439,20 +439,26 @@ def _read_log(
         MATCH (ev)-[:EXECUTED_BY]->(ss:Sensor)
         MATCH (ev)-[:ACTS_ON]->(en:Entity)
         WHERE {interval[0]} <= ev.timestamp <= {interval[1]}
-        CALL {{
-            WITH ev, en
-            MATCH (ev0)-[:DF_CONTROL_FLOW_ITEM*0..]->(ev)
-            MATCH (ev0)-[:ACTS_ON]->(en)
-            MATCH (ev0)-[:ASSOCIATE_TYPE]->(ent:EntityType)
-            RETURN toInteger(split(elementId(ev0), ':')[2]) AS id0,
-                   ev0.timestamp as time0, ent
-            ORDER BY time0 DESC, id0 DESC
-            LIMIT 1
-        }}
+        CALL apoc.when (NOT EXISTS{{
+                            MATCH (en)-[:IS_OF_TYPE]->(ent1:EntityType)
+                            MATCH (en)-[:IS_OF_TYPE]->(ent2:EntityType)
+                            WHERE ent1 <> ent2
+                        }},
+                        'MATCH (en)-[:IS_OF_TYPE]->(ent:EntityType)
+                         RETURN ent',
+                        'MATCH (ev0)-[:DF_CONTROL_FLOW_ITEM*0..]->(ev)
+                         MATCH (ev0)-[:ACTS_ON]->(en)
+                         MATCH (ev0)-[:ASSOCIATE_TYPE]->(ent:EntityType)
+                         RETURN toInteger(split(elementId(ev0), \\':\\')[2]) AS id0,
+                                ev0.timestamp as time0, ent
+                         ORDER BY time0 DESC, id0 DESC
+                         LIMIT 1',
+                        {{ev:ev, en:en}}
+             ) YIELD value AS res
         RETURN toInteger(split(elementId(ev), ':')[2]) AS id,
                ev.timestamp AS time, st.sysId AS station,
                st.type AS role, en.sysId AS part,
-               ent.code AS type,
+               res.ent.code AS type,
                CASE
                     WHEN ss.type IS NOT NULL AND ss.subType IS NOT NULL
                     THEN ss.type + '_' + ss.subType
@@ -1038,27 +1044,6 @@ def _reconstruct_states(
             if i < window[1]:
                 window[1] = i
 
-    for station, sublog in station_sublogs.items():
-        operation = model.nodes[station]["operation"]
-        if operation in {"REPLACE", "ATTACH", "COMPOSE"}:
-            for j in range(0, len(sublog)):
-                event = sublog.iloc[j]
-                activity = event["activity"]
-                if activity == "EXIT_AP":
-                    i = sublog.index[j]
-                    if i > window[0]:
-                        window[0] = i
-                    break
-        elif operation in {"DETACH", "DECOMPOSE"}:
-            for j in range(len(sublog) - 1, -1, -1):
-                event = sublog.iloc[j]
-                activity = event["activity"]
-                if activity == "ENTER_BP":
-                    i = sublog.index[j]
-                    if i < window[1]:
-                        window[1] = i
-                    break
-
     log["state"] = None
     for i in range(window[0], window[1]):
         log.at[i, "state"] = _create_state(model)
@@ -1424,22 +1409,6 @@ def _mine_transfer_times(
                         if machine_load >= machine_capacity:
                             is_queued = True
                             break
-            elif operation in {"REPLACE", "ATTACH", "COMPOSE"}:
-                station_sublog = station_sublogs[enter_station]
-                j_ = station_sublog.index.get_loc(i)
-                i_ = i
-                event = enter_event
-                while (
-                    j_ > 0
-                    and i_ > window[0]
-                    and enter_event["time"] - event["time"] <= seize_delay
-                ):
-                    j_ -= 1
-                    i_ = station_sublog.index[j_]
-                    event = station_sublog.iloc[j_]
-                    if event["activity"] == "EXIT_AP":
-                        is_queued = True
-                        break
             else:
                 station_sublog = station_sublogs[enter_station]
                 j_ = station_sublog.index.get_loc(i)
@@ -1453,7 +1422,7 @@ def _mine_transfer_times(
                     j_ -= 1
                     i_ = station_sublog.index[j_]
                     event = station_sublog.iloc[j_]
-                    if event["activity"] == "ENTER_AP":
+                    if event["activity"].startswith("EXIT"):
                         is_queued = True
                         break
 

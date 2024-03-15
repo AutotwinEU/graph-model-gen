@@ -30,7 +30,7 @@
     "model": {
         "path": "model.json",
         "delays": {
-            "seize": 0,
+            "seize": 1000,
             "release": 0
         }
     }

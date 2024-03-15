@@ -7,7 +7,7 @@
         "username": "neo4j",
         "password": "12345678",
         "database": "neo4j",
-        "interval": [0, 300000000]
+        "interval": [0, 500000000]
     },
     "data": {
         "path": "log.csv",
@@ -30,7 +30,7 @@
     "model": {
         "path": "model.json",
         "delays": {
-            "seize": 0,
+            "seize": 30000,
             "release": 0
         }
     }

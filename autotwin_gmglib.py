@@ -196,7 +196,7 @@ def show_model(
         operation = model.nodes[station]["operation"]
         formulas = model.nodes[station]["formulas"]
         if operation in {"ORDINARY", "DETACH"}:
-            flow = []
+            flow = list()
             for formula in formulas:
                 type_ = next(iter(formula["input"].keys()))
                 major = type_.split("_")[0]
@@ -205,7 +205,7 @@ def show_model(
             flow.sort()
             flow = "|".join(flow)
         elif operation == "ATTACH":
-            flow = []
+            flow = list()
             for formula in formulas:
                 type_ = next(iter(formula["output"].keys()))
                 major = type_.split("_")[0]
@@ -220,7 +220,7 @@ def show_model(
     connections = list(model.edges.keys())
     connection_flows = dict()
     for connection in connections:
-        flow = []
+        flow = list()
         transfer_times = model.edges[connection]["transfer_times"]
         for type_ in transfer_times.keys():
             major = type_.split("_")[0]
@@ -230,7 +230,7 @@ def show_model(
         flow = "|".join(flow)
         connection_flows[connection] = flow
 
-    flows = []
+    flows = list()
     for flow in station_flows.values():
         if flow not in flows:
             flows.append(flow)
@@ -251,7 +251,7 @@ def show_model(
     for x in range(len(flows)):
         flow_colors[flows[x]] = colors[x].reshape(1, -1)
 
-    paths = []
+    paths = list()
     for station in stations:
         flow = station_flows[station]
         if flow is None:
@@ -263,7 +263,7 @@ def show_model(
         )
         paths.append(path)
 
-    patches = []
+    patches = list()
     for connection in connections:
         flow = connection_flows[connection]
         if flow is None:
@@ -278,8 +278,8 @@ def show_model(
 
     networkx.draw_networkx_labels(model, pos, font_size=8)
 
-    handles = []
-    labels = []
+    handles = list()
+    labels = list()
     for flow in flows:
         color = flow_colors[flow]
         handles.append(mpatches.Rectangle((0, 0), 0, 0, color=color))
@@ -800,10 +800,10 @@ def _mine_topology(
         model.nodes[station]["is_source"] = model.in_degree(station) <= 0
         model.nodes[station]["is_sink"] = model.out_degree(station) <= 0
         model.nodes[station]["operation"] = "ORDINARY"
-        model.nodes[station]["formulas"] = []
+        model.nodes[station]["formulas"] = list()
         model.nodes[station]["buffer_capacities"] = dict()
         model.nodes[station]["machine_capacity"] = 0
-        model.nodes[station]["processing_times"] = []
+        model.nodes[station]["processing_times"] = list()
 
     for connection in connections:
         model.edges[connection]["routing_probabilities"] = dict()
@@ -972,7 +972,7 @@ def _mine_formulas(
     for station, sublog in station_sublogs.items():
         operation = model.nodes[station]["operation"]
         formulas = model.nodes[station]["formulas"]
-        frequencies = []
+        frequencies = list()
         formula = None
         for j in range(len(sublog)):
             event = sublog.iloc[j]

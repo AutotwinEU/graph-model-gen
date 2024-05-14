@@ -24,6 +24,7 @@ pandas = "^2.2.1"
 networkx = "^3.2.1"
 pygraphviz = "^1.12"
 matplotlib = "^3.8.3"
+scipy = "^1.13.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"

@@ -1176,24 +1176,32 @@ def _mine_capacities(model: networkx.DiGraph, log: pandas.DataFrame, window: lis
         log: Event log.
         window: Definite window.
     """
-    ceiling_state = _create_state(model)
+    event = log.loc[window[0]]
+    state = event["state"]
+    max_buffer_loads = dict()
+    max_machine_loads = dict()
+    for station in state.keys():
+        max_buffer_loads[station] = dict()
+        for type_ in state[station]["B"].keys():
+            max_buffer_loads[station][type_] = state[station]["B"][type_]
+        max_machine_loads[station] = sum(state[station]["M"].values())
     for i in range(window[0], window[1]):
         state = log.at[i, "state"]
         for station in state.keys():
-            for location in state[station].keys():
-                for type_ in state[station][location].keys():
-                    ceiling_state[station][location][type_] = max(
-                        state[station][location][type_],
-                        ceiling_state[station][location][type_],
-                    )
+            for type_ in state[station]["B"].keys():
+                max_buffer_loads[station][type_] = max(
+                    state[station]["B"][type_], max_buffer_loads[station][type_]
+                )
+            max_machine_loads[station] = max(
+                sum(state[station]["M"].values()), max_machine_loads[station]
+            )
 
     for station in model.nodes.keys():
         buffer_capacities = model.nodes[station]["buffer_capacities"]
-        for type_, load in ceiling_state[station]["B"].items():
-            buffer_capacities[type_] = load
+        buffer_capacities.update(max_buffer_loads[station])
         operation = model.nodes[station]["operation"]
         if operation == "ORDINARY":
-            machine_capacity = max(ceiling_state[station]["M"].values())
+            machine_capacity = max_machine_loads[station]
         else:
             machine_capacity = 1
         model.nodes[station]["machine_capacity"] = machine_capacity

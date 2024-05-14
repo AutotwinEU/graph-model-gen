@@ -32,6 +32,9 @@
         "delays": {
             "seize": 30000,
             "release": 0
+        },
+        "cdf": {
+            "points": 100
         }
     }
 }

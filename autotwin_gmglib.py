@@ -15,6 +15,7 @@ import matplotlib.widgets as mwidgets
 import threading
 import warnings
 import bisect
+import copy
 import scipy
 import math
 
@@ -1236,9 +1237,25 @@ def _reconstruct_states(
             if i < window[1]:
                 window[1] = i
 
+    zero_state = dict()
+    for station in model.nodes.keys():
+        zero_state[station] = dict()
+        zero_state[station]["B"] = dict()
+        zero_state[station]["M"] = dict()
+        sublog = station_sublogs[station]
+        for j in range(len(sublog)):
+            event = sublog.iloc[j]
+            type_ = event["type"]
+            activity = event["activity"]
+            if activity.startswith("ENTER"):
+                zero_state[station]["B"][type_] = 0
+                zero_state[station]["M"][type_] = 0
+            else:
+                zero_state[station]["M"][type_] = 0
+
     log["state"] = None
     for i in range(window[0], window[1]):
-        log.at[i, "state"] = _create_state(model)
+        log.at[i, "state"] = copy.deepcopy(zero_state)
     for sublog in station_sublogs.values():
         sublog["state"] = None
         sublog.update(log["state"])
@@ -1247,7 +1264,7 @@ def _reconstruct_states(
         sublog.update(log["state"])
 
     previous_state = log.at[window[0], "state"]
-    floor_state = _create_state(model)
+    floor_state = copy.deepcopy(zero_state)
     for i in range(window[0] + 1, window[1]):
         event = log.loc[i]
         station = event["station"]
@@ -1257,7 +1274,12 @@ def _reconstruct_states(
         input_ = event["input"]
         output = event["output"]
         state = event["state"]
-        _copy_state(previous_state, state)
+        for station_ in previous_state.keys():
+            for location_ in previous_state[station_].keys():
+                for type__ in previous_state[station_][location_].keys():
+                    state[station_][location_][type__] = (
+                        previous_state[station_][location_][type__]
+                    )
         is_source = model.nodes[station]["is_source"]
         is_sink = model.nodes[station]["is_sink"]
         operation = model.nodes[station]["operation"]
@@ -1293,10 +1315,10 @@ def _reconstruct_states(
                 floor_state[station]["B"][type_],
             )
         else:
-            for input_type in state[station]["M"].keys():
-                floor_state[station]["M"][input_type] = min(
-                    state[station]["M"][input_type],
-                    floor_state[station]["M"][input_type],
+            for type__ in state[station]["M"].keys():
+                floor_state[station]["M"][type__] = min(
+                    state[station]["M"][type__],
+                    floor_state[station]["M"][type__],
                 )
         previous_state = state
 
@@ -1308,56 +1330,6 @@ def _reconstruct_states(
                     state[station][location][type_] -= (
                         floor_state[station][location][type_]
                     )
-
-
-def _create_state(model: networkx.DiGraph) -> dict[str, dict[str, dict[str, int]]]:
-    """Create a new state.
-
-    Args:
-        model: Graph model.
-
-    Returns:
-        New state.
-    """
-    state = dict()
-    for station in model.nodes.keys():
-        state[station] = dict()
-        operation = model.nodes[station]["operation"]
-        formulas = model.nodes[station]["formulas"]
-        for location in ["B", "M"]:
-            state[station][location] = dict()
-            if location == "B":
-                for formula in formulas:
-                    for type_ in formula["input"].keys():
-                        state[station][location][type_] = 0
-            else:
-                if operation in {"ORDINARY", "REPLACE", "ATTACH", "COMPOSE"}:
-                    for formula in formulas:
-                        for type_ in formula["input"].keys():
-                            state[station][location][type_] = 0
-                else:
-                    for formula in formulas:
-                        for type_ in formula["output"].keys():
-                            state[station][location][type_] = 0
-    return state
-
-
-def _copy_state(
-    source_state: dict[str, dict[str, dict[str, int]]],
-    target_state: dict[str, dict[str, dict[str, int]]],
-):
-    """Copy one state to another.
-
-    Args:
-        source_state: Source state.
-        target_state: Target state.
-    """
-    for station in source_state.keys():
-        for location in source_state[station].keys():
-            for type_ in source_state[station][location].keys():
-                target_state[station][location][type_] = (
-                    source_state[station][location][type_]
-                )
 
 
 def _mine_capacities(model: networkx.DiGraph, log: pandas.DataFrame, window: list[int]):

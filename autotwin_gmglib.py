@@ -142,7 +142,7 @@ def generate_model(log: pandas.DataFrame, config: dict[str, Any]) -> networkx.Di
     _normalize_activities(station_sublogs, part_sublogs, log)
     _mine_topology(model, station_sublogs, part_sublogs, log)
     _identify_operations(model, station_sublogs, part_sublogs)
-    _mine_formulas(model, station_sublogs, part_sublogs, log)
+    _mine_formulas(model, station_sublogs, part_sublogs, log, config)
     window = [-1, len(log) - 1]
     _reconstruct_states(model, station_sublogs, part_sublogs, log, window)
     _mine_capacities(model, log, window)
@@ -1066,6 +1066,7 @@ def _mine_formulas(
     station_sublogs: dict[str, pandas.DataFrame],
     part_sublogs: dict[str, pandas.DataFrame],
     log: pandas.DataFrame,
+    config: dict[str, Any],
 ):
     """Mine input-output formulas at each station.
 
@@ -1074,6 +1075,7 @@ def _mine_formulas(
         station_sublogs: Station sublogs.
         part_sublogs: Part sublogs.
         log: Event log.
+        config: Configuration.
     """
     log["input"] = None
     log["output"] = None
@@ -1209,6 +1211,16 @@ def _mine_formulas(
                     formulas.append(formula)
                     frequencies.append(1)
                     formula = None
+
+        indexes = []
+        max_frequency = max(frequencies)
+        min_ratio = config["model"]["formula"]["ratio"]
+        for x in range(len(frequencies)):
+            if frequencies[x] / max_frequency < min_ratio:
+                indexes.append(x)
+        indexes.reverse()
+        for x in indexes:
+            del formulas[x]
 
 
 def _reconstruct_states(

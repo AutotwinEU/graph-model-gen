@@ -29,6 +29,9 @@
     },
     "model": {
         "path": "model.json",
+        "formula": {
+            "ratio": 0.06
+        },
         "delays": {
             "seize": 30000,
             "release": 0

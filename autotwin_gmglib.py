@@ -338,9 +338,9 @@ def show_model(
         visible=False,
         zorder=6.0,
     )
-    cdf_figure_num = 0
+    cdf_figure_num = -1
     cdf_focus = None
-    cdf_index = 0
+    cdf_index = -1
 
     def handle_mouse_motion(event: mbackend.MouseEvent):
         """Handle a mouse motion in the main figure.
@@ -366,7 +366,7 @@ def show_model(
                     focus = station_
                 attributes = model.nodes[station_]
                 annotation.xy = pos[station_]
-                text += "Station: " + str(station_) + "\n"
+                text += "Station: " + station_ + "\n"
                 text += "Operation: "
                 text += get_display_text(attributes["operation"], 1) + "\n"
                 text += "Formulas: "
@@ -382,18 +382,28 @@ def show_model(
                 cdf_axes = mpyplot.figure(num=cdf_figure_num).axes[0]
                 if len(cdf_axes.lines) > 2:
                     cdf_axes.lines[2].remove()
-                cdf_axes_title = (
-                    "Processing Time CDF of Formula 1 at Station " + station_
-                )
-                cdf_axes.set_title(cdf_axes_title, fontsize=10.0)
-                cdf = attributes["processing_times"][0]["cdf"]
-                warnings.simplefilter("ignore", category=UserWarning)
-                cdf_axes.set_xlim(left=cdf[0][0], right=cdf[-1][0])
-                warnings.simplefilter("default", category=UserWarning)
-                cdf_axes.set_ylim(bottom=0.0, top=1.2)
-                cdf_axes.step(*zip(*cdf), where="post", color="tab:blue", linewidth=1.0)
-                cdf_focus = station_
-                cdf_index = 0
+                if len(attributes["processing_times"]) <= 0:
+                    cdf_axes_title = (
+                        "No Processing Time CDFs at Station " + station_
+                    )
+                    cdf_axes.set_title(cdf_axes_title, fontsize=10.0)
+                    cdf_axes.set_xlim(left=-0.05, right=0.05)
+                    cdf_axes.set_ylim(bottom=0.0, top=1.2)
+                    cdf_focus = station_
+                    cdf_index = -1
+                else:
+                    cdf_axes_title = (
+                        "Processing Time CDF of Formula 1 at Station " + station_
+                    )
+                    cdf_axes.set_title(cdf_axes_title, fontsize=10.0)
+                    cdf = attributes["processing_times"][0]["cdf"]
+                    warnings.simplefilter("ignore", category=UserWarning)
+                    cdf_axes.set_xlim(left=cdf[0][0], right=cdf[-1][0])
+                    warnings.simplefilter("default", category=UserWarning)
+                    cdf_axes.set_ylim(bottom=0.0, top=1.2)
+                    cdf_axes.step(*zip(*cdf), where="post", color="tab:blue", linewidth=1.0)
+                    cdf_focus = station_
+                    cdf_index = 0
         for x_ in range(len(patches)):
             if is_inside:
                 break
@@ -411,8 +421,8 @@ def show_model(
                     (origin_xy[0] + destination_xy[0]) / 2,
                     (origin_xy[1] + destination_xy[1]) / 2,
                 )
-                text += "Origin Station: " + str(connection_[0]) + "\n"
-                text += "Destination Station: " + str(connection_[1]) + "\n"
+                text += "Origin Station: " + connection_[0] + "\n"
+                text += "Destination Station: " + connection_[1] + "\n"
                 text += "Routing Probabilities: "
                 text += get_display_text(attributes["routing_probabilities"], 1) + "\n"
                 text += "Transfer Times: "
@@ -422,20 +432,31 @@ def show_model(
                 cdf_axes = mpyplot.figure(num=cdf_figure_num).axes[0]
                 if len(cdf_axes.lines) > 2:
                     cdf_axes.lines[2].remove()
-                types = list(attributes["transfer_times"].keys())
-                cdf_axes_title = (
-                    "Transfer Time CDF of Type " + types[0] + " on Connection ("
-                    + connection_[0] + ", " + connection_[1] + ")"
-                )
-                cdf_axes.set_title(cdf_axes_title, fontsize=10.0)
-                cdf = attributes["transfer_times"][types[0]]["cdf"]
-                warnings.simplefilter("ignore", category=UserWarning)
-                cdf_axes.set_xlim(left=cdf[0][0], right=cdf[-1][0])
-                warnings.simplefilter("default", category=UserWarning)
-                cdf_axes.set_ylim(bottom=0.0, top=1.2)
-                cdf_axes.step(*zip(*cdf), where="post", color="tab:blue", linewidth=1.0)
-                cdf_focus = connection_
-                cdf_index = 0
+                if len(attributes["transfer_times"]) < 0:
+                    cdf_axes_title = (
+                        "No Transfer Time CDFs on Connection ("
+                        + connection_[0] + ", " + connection_[1] + ")"
+                    )
+                    cdf_axes.set_title(cdf_axes_title, fontsize=10.0)
+                    cdf_axes.set_xlim(left=-0.05, right=0.05)
+                    cdf_axes.set_ylim(bottom=0.0, top=1.2)
+                    cdf_focus = connection_
+                    cdf_index = 0
+                else:
+                    types = list(attributes["transfer_times"].keys())
+                    cdf_axes_title = (
+                        "Transfer Time CDF of Type " + types[0] + " on Connection ("
+                        + connection_[0] + ", " + connection_[1] + ")"
+                    )
+                    cdf_axes.set_title(cdf_axes_title, fontsize=10.0)
+                    cdf = attributes["transfer_times"][types[0]]["cdf"]
+                    warnings.simplefilter("ignore", category=UserWarning)
+                    cdf_axes.set_xlim(left=cdf[0][0], right=cdf[-1][0])
+                    warnings.simplefilter("default", category=UserWarning)
+                    cdf_axes.set_ylim(bottom=0.0, top=1.2)
+                    cdf_axes.step(*zip(*cdf), where="post", color="tab:blue", linewidth=1.0)
+                    cdf_focus = connection_
+                    cdf_index = 0
         if is_inside:
             point_xy = axes.transData.transform(annotation.xy)
             center_xy = figure.transFigure.transform((0.5, 0.5))
@@ -532,6 +553,9 @@ def show_model(
         Args:
             event (mbases.MouseEvent): Mouse motion event.
         """
+        nonlocal cdf_index
+        if cdf_index < 0:
+            return
         cdf_axes = mpyplot.figure(num=cdf_figure_num).axes[0]
         if event.inaxes:
             cdf_xdata, cdf_ydata = cdf_axes.lines[2].get_data()
@@ -564,6 +588,8 @@ def show_model(
             event (mbases.MouseEvent): Button click event.
         """
         nonlocal cdf_index
+        if cdf_index < 0:
+            return
         button = event.inaxes.button
         if cdf_focus in stations:
             processing_times = model.nodes[cdf_focus]["processing_times"]
@@ -1288,15 +1314,16 @@ def _mine_formulas(
                     frequencies.append(1)
                     formula = None
 
-        indexes = []
-        max_frequency = max(frequencies)
-        min_ratio = config["model"]["formula"]["ratio"]
-        for x in range(len(frequencies)):
-            if frequencies[x] / max_frequency < min_ratio:
-                indexes.append(x)
-        indexes.reverse()
-        for x in indexes:
-            del formulas[x]
+        if len(formulas) > 1:
+            indexes = []
+            max_frequency = max(frequencies)
+            min_ratio = config["model"]["formula"]["ratio"]
+            for x in range(len(frequencies)):
+                if frequencies[x] / max_frequency < min_ratio:
+                    indexes.append(x)
+            indexes.reverse()
+            for x in indexes:
+                del formulas[x]
 
 
 def _reconstruct_states(

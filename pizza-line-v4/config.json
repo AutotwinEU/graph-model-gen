@@ -3,41 +3,15 @@
     "version": "V4",
     "work_path": "pizza-line-v4",
     "neo4j": {
-        "uri": "neo4j://localhost:7687",
-        "username": "neo4j",
-        "password": "12345678",
-        "database": "neo4j",
         "interval": [0, 500000000]
     },
-    "data": {
-        "path": "log.csv",
-        "mappings": {
-            "column": {
-                "time": "time",
-                "station": "station",
-                "part": "part",
-                "type": "type",
-                "activity": "activity"
-            },
-            "activity": {
-                "ENTER": "ENTER",
-                "EXIT": "EXIT",
-                "EXIT_AP": "EXIT_AP",
-                "EXIT_AR": "EXIT_AR"
-            }
-        }
-    },
     "model": {
-        "path": "model.json",
         "formula": {
             "ratio": 0.06
         },
         "delays": {
             "seize": 30000,
             "release": 0
-        },
-        "cdf": {
-            "points": 100
         }
     }
 }

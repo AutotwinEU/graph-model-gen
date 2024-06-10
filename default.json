@@ -1,0 +1,43 @@
+{
+    "name": "System",
+    "version": "",
+    "work_path": "",
+    "neo4j": {
+        "uri": "neo4j://localhost:7687",
+        "username": "neo4j",
+        "password": "12345678",
+        "database": "neo4j",
+        "interval": [0.0, 0.0]
+    },
+    "data": {
+        "path": "log.csv",
+        "mappings": {
+            "column": {
+                "time": "time",
+                "station": "station",
+                "part": "part",
+                "type": "type",
+                "activity": "activity"
+            },
+            "activity": {
+                "ENTER": "ENTER",
+                "EXIT": "EXIT",
+                "EXIT_AP": "EXIT_AP",
+                "EXIT_AR": "EXIT_AR"
+            }
+        }
+    },
+    "model": {
+        "path": "model.json",
+        "formula": {
+            "ratio": 0.0
+        },
+        "delays": {
+            "seize": 0.0,
+            "release": 0.0
+        },
+        "cdf": {
+            "points": 100
+        }
+    }
+}

@@ -15,7 +15,6 @@ import matplotlib.widgets as mwidgets
 import threading
 import warnings
 import bisect
-import copy
 import scipy
 import math
 
@@ -25,11 +24,18 @@ mpyplot.rcParams["ps.fonttype"] = 42
 
 
 ###############################################################################
+# Private constants                                                           #
+###############################################################################
+_LIBRARY_FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
+_DEFAULT_CONFIG_PATH = os.path.join(_LIBRARY_FOLDER_PATH, "default.json")
+
+
+###############################################################################
 # Public functions                                                            #
 ###############################################################################
 
 
-def load_config(path: str) -> dict[str, Any]:
+def load_config(path: str = None) -> dict[str, Any]:
     """Load configuration from a JSON file.
 
     Args:
@@ -38,8 +44,27 @@ def load_config(path: str) -> dict[str, Any]:
     Returns:
         Configuration.
     """
-    with open(path, encoding="utf-8") as file:
+    with open(_DEFAULT_CONFIG_PATH, encoding="utf-8") as file:
         config = json.load(file)
+
+    if path is not None:
+        with open(path, encoding="utf-8") as file:
+            config = _deep_update(json.load(file), config)
+        column_mappings = config["data"]["mappings"]["column"]
+        columns_to_drop = set()
+        for original_column, column in column_mappings.items():
+            if original_column != column:
+                columns_to_drop.add(column)
+        for column in columns_to_drop:
+            del column_mappings[column]
+        activity_mappings = config["data"]["mappings"]["activity"]
+        activities_to_drop = set()
+        for original_activity, activity in activity_mappings.items():
+            if original_activity != activity:
+                activities_to_drop.add(activity)
+        for activity in activities_to_drop:
+            del activity_mappings[activity]
+
     return config
 
 
@@ -94,6 +119,7 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     head.loc[-1] = {
         "time": 0.0, "station": None, "part": None, "type": None, "activity": None
     }
+
     path = os.path.join(config["work_path"], config["data"]["path"])
     column_mappings = config["data"]["mappings"]["column"]
     original_columns = column_mappings.keys()
@@ -103,11 +129,12 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         if column != "time"
     }
     body = pandas.read_csv(
-        path, usecols=original_columns, dtype=dtypes, na_filter=False
+        path, usecols=lambda c: c in original_columns, dtype=dtypes, na_filter=False
     )
     body.rename(columns=column_mappings, inplace=True)
     if "type" not in body.columns:
         body.insert(body.columns.get_loc("part") + 1, "type", "UNKNOWN")
+
     activity_mappings = config["data"]["mappings"]["activity"]
     original_activities = activity_mappings.keys()
     indices_to_drop = body[~body["activity"].isin(original_activities)].index
@@ -122,6 +149,7 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         raise RuntimeError("Unsupported time format")
     body["time"] = body["time"].map(lambda t: t.timestamp())
     body.sort_values(by="time", inplace=True, kind="stable")
+
     log = pandas.concat([head, body])
     return log
 
@@ -250,7 +278,7 @@ def show_model(
     figure, axes = mpyplot.subplots()
     window_title = "Graph Model"
     figure.canvas.manager.set_window_title(window_title)
-    axes_title = name + " (" + version + ")" if version else name
+    axes_title = name + " (" + version + ")" if version == "" else name
     axes.set_title(axes_title, fontsize=10.0)
     pos = layout(model)
     cmap = mpyplot.get_cmap("gist_rainbow")
@@ -450,10 +478,9 @@ def show_model(
         text = ""
         if isinstance(value, list):
             for x_ in range(len(value)):
-                x_ += 1
-                y_ = value[x_ - 1]
+                y_ = value[x_]
                 text += "\n" + "     " * level
-                text += str(x_) + ": " + get_display_text(y_, level + 1)
+                text += str(x_ + 1) + ": " + get_display_text(y_, level + 1)
         elif isinstance(value, dict):
             for x_, y_ in value.items():
                 if x_ in ignored_keys:
@@ -590,6 +617,55 @@ def show_model(
 ###############################################################################
 # Private functions                                                           #
 ###############################################################################
+
+
+def _deep_copy(source: Any) -> Any:
+    """Make a deep copy of a JSON-like object.
+
+    Args:
+        source: Source object.
+
+    Returns:
+        Target object.
+    """
+    if isinstance(source, list):
+        target = list()
+        for x in len(range(source)):
+            target.append(_deep_copy(source[x]))
+    elif isinstance(source, dict):
+        target = dict()
+        for x in source.keys():
+            target[x] = _deep_copy(source[x])
+    else:
+        target = source
+    return target
+
+
+def _deep_update(source: Any, target: Any) -> Any:
+    """Make a deep update of a JSON-like object.
+
+    Args:
+        source: Source object.
+        target: Target object.
+
+    Returns:
+        Target object.
+    """
+    if isinstance(source, list) and isinstance(target, list):
+        for x in range(len(source)):
+            if x < len(target):
+                target[x] = _deep_update(source[x], target[x])
+            else:
+                target.append(_deep_copy(source[x]))
+    elif isinstance(source, dict) and isinstance(target, dict):
+        for x in source.keys():
+            if x in target.keys():
+                target[x] = _deep_update(source[x], target[x])
+            else:
+                target[x] = _deep_copy(source[x])
+    else:
+        target = _deep_copy(source)
+    return target
 
 
 def _read_log(
@@ -1267,7 +1343,7 @@ def _reconstruct_states(
 
     log["state"] = None
     for i in range(window[0], window[1]):
-        log.at[i, "state"] = copy.deepcopy(zero_state)
+        log.at[i, "state"] = _deep_copy(zero_state)
     for sublog in station_sublogs.values():
         sublog["state"] = None
         sublog.update(log["state"])
@@ -1276,7 +1352,7 @@ def _reconstruct_states(
         sublog.update(log["state"])
 
     previous_state = log.at[window[0], "state"]
-    floor_state = copy.deepcopy(zero_state)
+    floor_state = _deep_copy(zero_state)
     for i in range(window[0] + 1, window[1]):
         event = log.loc[i]
         station = event["station"]
@@ -1286,12 +1362,7 @@ def _reconstruct_states(
         input_ = event["input"]
         output = event["output"]
         state = event["state"]
-        for station_ in previous_state.keys():
-            for location_ in previous_state[station_].keys():
-                for type__ in previous_state[station_][location_].keys():
-                    state[station_][location_][type__] = (
-                        previous_state[station_][location_][type__]
-                    )
+        state = _deep_update(previous_state, state)
         is_source = model.nodes[station]["is_source"]
         is_sink = model.nodes[station]["is_sink"]
         operation = model.nodes[station]["operation"]

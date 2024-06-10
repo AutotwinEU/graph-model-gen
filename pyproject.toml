@@ -16,6 +16,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only"
 ]
+include = ["default.json"]
 
 [tool.poetry.dependencies]
 python = "^3.10"

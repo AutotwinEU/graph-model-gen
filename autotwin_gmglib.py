@@ -26,6 +26,8 @@ mpyplot.rcParams["ps.fonttype"] = 42
 ###############################################################################
 # Private constants                                                           #
 ###############################################################################
+
+
 _LIBRARY_FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
 _DEFAULT_CONFIG_PATH = os.path.join(_LIBRARY_FOLDER_PATH, "default.json")
 
@@ -278,7 +280,7 @@ def show_model(
     figure, axes = mpyplot.subplots()
     window_title = "Graph Model"
     figure.canvas.manager.set_window_title(window_title)
-    axes_title = name + " (" + version + ")" if version == "" else name
+    axes_title = name + " (" + version + ")" if version != "" else name
     axes.set_title(axes_title, fontsize=10.0)
     pos = layout(model)
     cmap = mpyplot.get_cmap("gist_rainbow")
@@ -432,7 +434,7 @@ def show_model(
                 cdf_axes = mpyplot.figure(num=cdf_figure_num).axes[0]
                 if len(cdf_axes.lines) > 2:
                     cdf_axes.lines[2].remove()
-                if len(attributes["transfer_times"]) < 0:
+                if len(attributes["transfer_times"]) <= 0:
                     cdf_axes_title = (
                         "No Transfer Time CDFs on Connection ("
                         + connection_[0] + ", " + connection_[1] + ")"
@@ -441,7 +443,7 @@ def show_model(
                     cdf_axes.set_xlim(left=-0.05, right=0.05)
                     cdf_axes.set_ylim(bottom=0.0, top=1.2)
                     cdf_focus = connection_
-                    cdf_index = 0
+                    cdf_index = -1
                 else:
                     types = list(attributes["transfer_times"].keys())
                     cdf_axes_title = (

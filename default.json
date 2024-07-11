@@ -29,6 +29,12 @@
     },
     "model": {
         "path": "model.json",
+        "operation": {
+            "io_ratio": 1.5,
+            "co_ratio": 0.5,
+            "oi_ratio": 1.5,
+            "ci_ratio": 0.5
+        },
         "formula": {
             "ratio": 0.0
         },

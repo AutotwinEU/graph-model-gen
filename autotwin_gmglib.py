@@ -171,7 +171,7 @@ def generate_model(log: pandas.DataFrame, config: dict[str, Any]) -> networkx.Di
     station_sublogs, part_sublogs = _extract_sublogs(log)
     _normalize_activities(station_sublogs, part_sublogs, log)
     _mine_topology(model, station_sublogs, part_sublogs, log)
-    _identify_operations(model, station_sublogs, part_sublogs)
+    _identify_operations(model, station_sublogs, part_sublogs, config)
     _mine_formulas(model, station_sublogs, part_sublogs, log, config)
     window = [-1, len(log) - 1]
     _reconstruct_states(model, station_sublogs, part_sublogs, log, window)
@@ -658,7 +658,7 @@ def _deep_copy(source: Any) -> Any:
     """
     if isinstance(source, list):
         target = list()
-        for x in len(range(source)):
+        for x in range(len(source)):
             target.append(_deep_copy(source[x]))
     elif isinstance(source, dict):
         target = dict()
@@ -740,7 +740,7 @@ def _read_log(
                          LIMIT 1',
                         {{ev:ev, en:en}}
              ) YIELD value AS res
-        RETURN toInteger(split(elementId(ev), ':')[2]) AS id,
+        RETURN id(ev) AS id, elementId(ev) AS eid,
                ev.timestamp AS time, st.sysId AS station,
                st.type AS role, en.sysId AS part,
                res.ent.code AS type,
@@ -754,6 +754,27 @@ def _read_log(
         ORDER BY time, id
         """
     ).data()
+
+    for x in range(len(data) - 1):
+        y = x
+        for z in range(x + 1, len(data)):
+            if data[z]["time"] > data[x]["time"]:
+                break
+            has_df_path = transaction.run(
+                f"""
+                MATCH (ev2:Event) WHERE elementId(ev2) = '{data[z]["eid"]}'
+                MATCH (ev1:Event) WHERE elementId(ev1) = '{data[y]["eid"]}'
+                MATCH p = shortestPath((ev2)-[:DF_CONTROL_FLOW_ITEM|DF_SENSOR*]->(ev1))
+                WITH collect(p) AS p
+                RETURN CASE WHEN size(p) <= 0 THEN FALSE ELSE TRUE END AS has_df_path
+                """
+            ).data()[0]["has_df_path"]
+            if has_df_path:
+                y = z
+        if y > x:
+            temp = data[x]
+            data[x] = data[y]
+            data[y] = temp
 
     x = 0
     while x < len(data):
@@ -770,9 +791,9 @@ def _read_log(
             data[x + 1]["activity"] = "EXIT"
             x += 1
         x += 1
+
     columns = ["time", "station", "part", "type", "activity"]
     log = pandas.DataFrame.from_records(data, columns=columns)
-
     return log
 
 
@@ -987,7 +1008,7 @@ def _write_model(
 def _extract_sublogs(
     log: pandas.DataFrame,
 ) -> tuple[dict[str, pandas.DataFrame], dict[str, pandas.DataFrame]]:
-    """Extract the sublogs of parts and stations.
+    """Extract the sublogs of stations and parts.
 
     Args:
         log: Event log.
@@ -1111,6 +1132,7 @@ def _identify_operations(
     model: networkx.DiGraph,
     station_sublogs: dict[str, pandas.DataFrame],
     part_sublogs: dict[str, pandas.DataFrame],
+    config: dict[str, Any],
 ):
     """Identify the specific operation at each station.
 
@@ -1118,6 +1140,7 @@ def _identify_operations(
         model: Graph model.
         station_sublogs: Station sublogs.
         part_sublogs: Part sublogs.
+        config: Configuration.
     """
     stations = model.nodes.keys()
     input_frequencies = dict.fromkeys(stations, 0)
@@ -1143,26 +1166,33 @@ def _identify_operations(
             elif activity == "EXIT_AP":
                 output_frequencies[station] += 1
 
+    min_io_ratio = config["model"]["operation"]["io_ratio"]
+    min_co_ratio = config["model"]["operation"]["co_ratio"]
+    min_oi_ratio = config["model"]["operation"]["oi_ratio"]
+    min_ci_ratio = config["model"]["operation"]["ci_ratio"]
     for station in stations:
         if input_frequencies[station] <= 0 or output_frequencies[station] <= 0:
             model.nodes[station]["operation"] = "ORDINARY"
             continue
 
-        if input_frequencies[station] / output_frequencies[station] > 1.5:
-            if cross_frequencies[station] / output_frequencies[station] < 0.5:
-                model.nodes[station]["operation"] = "COMPOSE"
-            else:
+        if input_frequencies[station] / output_frequencies[station] >= min_io_ratio:
+            if cross_frequencies[station] / output_frequencies[station] >= min_co_ratio:
                 model.nodes[station]["operation"] = "ATTACH"
-        elif output_frequencies[station] / input_frequencies[station] > 1.5:
-            if cross_frequencies[station] / input_frequencies[station] < 0.5:
-                model.nodes[station]["operation"] = "DECOMPOSE"
             else:
+                model.nodes[station]["operation"] = "COMPOSE"
+        elif output_frequencies[station] / input_frequencies[station] >= min_oi_ratio:
+            if cross_frequencies[station] / input_frequencies[station] >= min_ci_ratio:
                 model.nodes[station]["operation"] = "DETACH"
-        else:
-            if cross_frequencies[station] / input_frequencies[station] < 0.5:
-                model.nodes[station]["operation"] = "REPLACE"
             else:
+                model.nodes[station]["operation"] = "DECOMPOSE"
+        else:
+            if (
+                cross_frequencies[station] / output_frequencies[station] >= min_co_ratio
+                and cross_frequencies[station] / input_frequencies[station] >= min_ci_ratio
+            ):
                 model.nodes[station]["operation"] = "ORDINARY"
+            else:
+                model.nodes[station]["operation"] = "REPLACE"
 
 
 def _mine_formulas(

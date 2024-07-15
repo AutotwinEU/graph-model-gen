@@ -1799,7 +1799,9 @@ def _compute_empirical_cdf(samples, config):
                 probabilities[y] = cdf.probabilities[x]
                 quantile = 0.0
                 max_delta = 0.0
-    cdf = [[quantiles[x], probabilities[x]] for x in range(len(quantiles))]
+    cdf = [
+        [float(quantiles[x]), float(probabilities[x])] for x in range(len(quantiles))
+    ]
     return cdf
 
 

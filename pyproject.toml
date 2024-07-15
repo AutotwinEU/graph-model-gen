@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "autotwin_gmglib"
-version = "0.1.3"
+version = "0.1.4"
 description = "Graph Model Generation Library for Auto-Twin"
 license = "BSD-3-Clause"
 authors = [

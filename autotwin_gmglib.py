@@ -1608,7 +1608,7 @@ def _mine_processing_times(
             ):
                 continue
 
-            sample = exit_event["time"] - enter_event["time"]
+            sample = float(exit_event["time"] - enter_event["time"])
             is_blocked = False
             if not model.nodes[station]["is_sink"]:
                 exit_part = exit_event["part"]
@@ -1665,8 +1665,8 @@ def _mine_processing_times(
                 processing_times[x]["std"] = 0.0
                 processing_times[x]["cdf"] = [[samples[x][0], 1.0]]
             else:
-                processing_times[x]["mean"] = scipy.stats.tmean(samples[x])
-                processing_times[x]["std"] = scipy.stats.tstd(samples[x])
+                processing_times[x]["mean"] = float(scipy.stats.tmean(samples[x]))
+                processing_times[x]["std"] = float(scipy.stats.tstd(samples[x]))
                 processing_times[x]["cdf"] = _compute_empirical_cdf(samples[x], config)
 
 
@@ -1724,15 +1724,13 @@ def _mine_transfer_times(
             if type_ not in samples[connection].keys():
                 samples[connection][type_] = list()
 
-            sample = enter_event["time"] - exit_event["time"]
+            sample = float(enter_event["time"] - exit_event["time"])
             is_queued = False
             operation = model.nodes[enter_station]["operation"]
             max_delay = config["model"]["delays"]["seize"]
             if operation == "ORDINARY":
                 machine_load = enter_event["state"][enter_station]["M"][type_]
-                machine_capacity = (
-                    model.nodes[enter_station]["machine_capacity"]
-                )
+                machine_capacity = model.nodes[enter_station]["machine_capacity"]
                 if machine_load >= machine_capacity:
                     i_ = i
                     event = enter_event
@@ -1779,11 +1777,11 @@ def _mine_transfer_times(
                 transfer_times[type_]["std"] = 0.0
                 transfer_times[type_]["cdf"] = [[samples[connection][type_][0], 1.0]]
             else:
-                transfer_times[type_]["mean"] = scipy.stats.tmean(
-                    samples[connection][type_]
+                transfer_times[type_]["mean"] = float(
+                    scipy.stats.tmean(samples[connection][type_])
                 )
-                transfer_times[type_]["std"] = scipy.stats.tstd(
-                    samples[connection][type_]
+                transfer_times[type_]["std"] = float(
+                    scipy.stats.tstd(samples[connection][type_])
                 )
                 transfer_times[type_]["cdf"] = _compute_empirical_cdf(
                     samples[connection][type_], config

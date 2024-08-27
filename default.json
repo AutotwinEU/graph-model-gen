@@ -16,6 +16,7 @@
                 "time": "time",
                 "station": "station",
                 "part": "part",
+                "family": "family",
                 "type": "type",
                 "activity": "activity"
             },

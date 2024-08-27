@@ -112,11 +112,9 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     Returns:
         Event log.
     """
-    columns = ["time", "station", "part", "type", "activity"]
+    columns = ["time", "station", "part", "family", "type", "activity"]
     head = pandas.DataFrame(columns=columns)
-    head.loc[-1] = {
-        "time": 0.0, "station": None, "part": None, "type": None, "activity": None
-    }
+    head.loc[-1] = {column: (0.0 if column == "time" else None) for column in columns}
 
     path = os.path.join(config["work_path"], config["data"]["path"])
     column_mappings = config["data"]["mappings"]["column"]
@@ -130,8 +128,10 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         path, usecols=lambda c: c in original_columns, dtype=dtypes, na_filter=False
     )
     body.rename(columns=column_mappings, inplace=True)
+    if "family" not in body.columns:
+        body.insert(body.columns.get_loc("part") + 1, "family", "UNKNOWN")
     if "type" not in body.columns:
-        body.insert(body.columns.get_loc("part") + 1, "type", "UNKNOWN")
+        body.insert(body.columns.get_loc("family") + 1, "type", "UNKNOWN")
 
     activity_mappings = config["data"]["mappings"]["activity"]
     original_activities = activity_mappings.keys()
@@ -221,57 +221,59 @@ def show_model(
     """
     name = model.graph["name"]
     version = model.graph["version"]
+    types = model.graph["types"]
 
     stations = list(model.nodes.keys())
-    station_flows = dict()
+    station_families = dict()
     for station in stations:
         operation = model.nodes[station]["operation"]
         formulas = model.nodes[station]["formulas"]
-        if operation in {"ORDINARY", "DETACH"}:
-            flow = list()
-            for formula in formulas:
-                type_ = next(iter(formula["input"].keys()))
-                major = type_.split("_")[0]
-                if major not in flow:
-                    flow.append(major)
-            flow.sort()
-            flow = "|".join(flow)
-        elif operation == "ATTACH":
-            flow = list()
+        family = None
+        if operation in {"ORDINARY", "ATTACH"}:
             for formula in formulas:
                 type_ = next(iter(formula["output"].keys()))
-                major = type_.split("_")[0]
-                if major not in flow:
-                    flow.append(major)
-            flow.sort()
-            flow = "|".join(flow)
-        else:
-            flow = None
-        station_flows[station] = flow
+                family_ = None
+                for family_ in types.keys():
+                    if type_ in types[family_]:
+                        break
+                if family is None:
+                    family = family_
+                else:
+                    if family_ != family:
+                        family = None
+                        break
+        elif operation == "DETACH":
+            for formula in formulas:
+                type_ = next(iter(formula["input"].keys()))
+                family_ = None
+                for family_ in types.keys():
+                    if type_ in types[family_]:
+                        break
+                if family is None:
+                    family = family_
+                else:
+                    if family_ != family:
+                        family = None
+                        break
+        station_families[station] = family
 
     connections = list(model.edges.keys())
-    connection_flows = dict()
+    connection_families = dict()
     for connection in connections:
-        flow = list()
         routing_probabilities = model.edges[connection]["routing_probabilities"]
+        family = None
         for type_ in routing_probabilities.keys():
-            major = type_.split("_")[0]
-            if major not in flow:
-                flow.append(major)
-        flow.sort()
-        flow = "|".join(flow)
-        connection_flows[connection] = flow
-
-    flows = list()
-    for flow in station_flows.values():
-        if flow not in flows:
-            flows.append(flow)
-    for flow in connection_flows.values():
-        if flow not in flows:
-            flows.append(flow)
-    if None in flows:
-        flows.remove(None)
-    flows.sort()
+            family_ = None
+            for family_ in types.keys():
+                if type_ in types[family_]:
+                    break
+            if family is None:
+                family = family_
+            else:
+                if family_ != family:
+                    family = None
+                    break
+        connection_families[connection] = family
 
     figure, axes = mpyplot.subplots()
     window_title = "Graph Model"
@@ -282,18 +284,20 @@ def show_model(
     cmap = mpyplot.get_cmap("gist_rainbow")
     white = mcolors.to_rgba_array("white")
     black = mcolors.to_rgba_array("black")
-    colors = cmap(numpy.linspace(0.0, 1.0, len(flows)))
-    flow_colors = dict()
-    for x in range(len(flows)):
-        flow_colors[flows[x]] = colors[x].reshape(1, -1)
+    colors = cmap(numpy.linspace(0.0, 1.0, len(types)))
+    family_colors = dict()
+    x = 0
+    for family in types.keys():
+        family_colors[family] = colors[x].reshape(1, -1)
+        x += 1
 
     paths = list()
     for station in stations:
-        flow = station_flows[station]
-        if flow is None:
+        family = station_families[station]
+        if family is None:
             color = white
         else:
-            color = flow_colors[flow]
+            color = family_colors[family]
         path = networkx.draw_networkx_nodes(
             model, pos, nodelist=[station], node_color=color, edgecolors=black
         )
@@ -301,11 +305,11 @@ def show_model(
 
     patches = list()
     for connection in connections:
-        flow = connection_flows[connection]
-        if flow is None:
+        family = connection_families[connection]
+        if family is None:
             color = white
         else:
-            color = flow_colors[flow]
+            color = family_colors[family]
         patch = networkx.draw_networkx_edges(
             model, pos, edgelist=[connection], edge_color=color, arrowsize=20
         )
@@ -316,11 +320,11 @@ def show_model(
 
     handles = list()
     labels = list()
-    for flow in flows:
-        color = flow_colors[flow]
+    for family in types.keys():
+        color = family_colors[family]
         handles.append(mpatches.Rectangle((0.0, 0.0), 0.0, 0.0, color=color))
-        labels.append(flow)
-    axes.legend(handles, labels, fontsize=8, title="Flow", title_fontsize=8)
+        labels.append(family + ": " + ", ".join(types[family]))
+    axes.legend(handles, labels, fontsize=8, title="Family of Types", title_fontsize=8)
 
     focus = None
     lock = threading.Lock()
@@ -734,9 +738,8 @@ def _read_log(
                          LIMIT 1',
                         {{ev:ev, en:en}}
              ) YIELD value AS res
-        RETURN id(ev) AS id, elementId(ev) AS eid,
-               ev.timestamp AS time, st.sysId AS station,
-               st.type AS role, en.sysId AS part,
+        RETURN elementId(ev) AS eid, ev.timestamp AS time, st.sysId AS station,
+               st.type AS role, en.sysId AS part, res.ent.familyCode AS family,
                res.ent.code AS type,
                CASE
                     WHEN ss.type IS NOT NULL AND ss.subType IS NOT NULL
@@ -745,7 +748,7 @@ def _read_log(
                     THEN ss.type
                     ELSE 'UNKNOWN'
                END AS activity
-        ORDER BY time, id
+        ORDER BY time, id(ev)
         """
     ).data()
 
@@ -786,7 +789,7 @@ def _read_log(
             x += 1
         x += 1
 
-    columns = ["time", "station", "part", "type", "activity"]
+    columns = ["time", "station", "part", "family", "type", "activity"]
     log = pandas.DataFrame.from_records(data, columns=columns)
     return log
 
@@ -806,6 +809,7 @@ def _write_model(
     """
     model_name = model.graph["name"]
     model_version = model.graph["version"]
+    model_types = model.graph["types"]
     model_id = transaction.run(
         f"""
         CREATE (gm:GraphModel:Instance)
@@ -816,15 +820,16 @@ def _write_model(
     ).data()[0]["eid"]
 
     type_ids = dict()
-    for type_ in model.graph["types"]:
-        type_ids[type_] = transaction.run(
-            f"""
-            MATCH (ent:EntityType {{code: '{type_}'}})
-            MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
-            CREATE (ent)-[:PART_OF]->(gm)
-            RETURN elementId(ent) AS eid
-            """
-        ).data()[0]["eid"]
+    for family in model_types:
+        for type_ in model_types[family]:
+            type_ids[type_] = transaction.run(
+                f"""
+                MATCH (ent:EntityType {{code: '{type_}'}})
+                MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
+                CREATE (ent)-[:PART_OF]->(gm)
+                RETURN elementId(ent) AS eid
+                """
+            ).data()[0]["eid"]
 
     for station, attributes in model.nodes.items():
         operation = attributes["operation"]
@@ -839,7 +844,7 @@ def _write_model(
         ).data()[0]["eid"]
 
         buffer_capacities = attributes["buffer_capacities"]
-        for type_, capacity in buffer_capacities.items():
+        for family, capacity in buffer_capacities.items():
             buffer_id = transaction.run(
                 f"""
                 CREATE (bf:Entity:Resource:Station:Buffer)
@@ -847,13 +852,14 @@ def _write_model(
                 RETURN elementId(bf) AS eid
                 """
             ).data()[0]["eid"]
-            transaction.run(
-                f"""
-                MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
-                MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
-                CREATE (ent)-[:OCCUPIES]->(bf)
-                """
-            )
+            for type_ in model_types[family]:
+                transaction.run(
+                    f"""
+                    MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                    MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
+                    CREATE (ent)-[:OCCUPIES]->(bf)
+                    """
+                )
             transaction.run(
                 f"""
                 MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
@@ -1083,9 +1089,18 @@ def _mine_topology(
         part_sublogs: Part sublogs.
         log: Event log.
     """
-    types = log["type"].unique()
-    types = types[pandas.notnull(types)]
-    model.graph["types"] = list(types)
+    types = dict()
+    for i in range(len(log) - 1):
+        event = log.loc[i]
+        family = event["family"]
+        type_ = event["type"]
+        if family is None or type_ is None:
+            continue
+        if family not in types.keys():
+            types[family] = list()
+        if type_ not in types[family]:
+            types[family].append(type_)
+    model.graph["types"] = types
 
     stations = station_sublogs.keys()
     for station in stations:
@@ -1476,24 +1491,34 @@ def _mine_capacities(model: networkx.DiGraph, log: pandas.DataFrame, window: lis
         log: Event log.
         window: Definite window.
     """
-    event = log.loc[window[0]]
-    state = event["state"]
+    state = log.at[window[0], "state"]
+    types = model.graph["types"]
     max_buffer_loads = dict()
     max_machine_loads = dict()
     for station in state.keys():
         max_buffer_loads[station] = dict()
         for type_ in state[station]["B"].keys():
-            max_buffer_loads[station][type_] = state[station]["B"][type_]
-        max_machine_loads[station] = sum(state[station]["M"].values())
+            family = None
+            for family in types.keys():
+                if type_ in types[family]:
+                    break
+            max_buffer_loads[station][family] = 0
+        max_machine_loads[station] = 0
+
     for i in range(window[0], window[1]):
         state = log.at[i, "state"]
         for station in state.keys():
-            for type_ in state[station]["B"].keys():
-                max_buffer_loads[station][type_] = max(
-                    state[station]["B"][type_], max_buffer_loads[station][type_]
+            for family in max_buffer_loads[station].keys():
+                buffer_load = 0
+                for type_ in types[family]:
+                    if type_ in state[station]["B"].keys():
+                        buffer_load += state[station]["B"][type_]
+                max_buffer_loads[station][family] = max(
+                    buffer_load, max_buffer_loads[station][family]
                 )
+            station_load = sum(state[station]["M"].values())
             max_machine_loads[station] = max(
-                sum(state[station]["M"].values()), max_machine_loads[station]
+                station_load, max_machine_loads[station]
             )
 
     for station in model.nodes.keys():
@@ -1525,6 +1550,7 @@ def _mine_processing_times(
         window: Definite window.
         config: Configuration.
     """
+    types = model.graph["types"]
     for station, station_sublog in station_sublogs.items():
         formulas = model.nodes[station]["formulas"]
         operation = model.nodes[station]["operation"]
@@ -1585,15 +1611,18 @@ def _mine_processing_times(
             is_blocked = False
             if not model.nodes[station]["is_sink"]:
                 exit_part = exit_event["part"]
-                exit_type = exit_event["type"]
+                exit_family = exit_event["family"]
                 part_sublog = part_sublogs[exit_part]
                 i = exit_index
                 j = part_sublog.index.get_loc(i)
                 next_event = part_sublog.iloc[j + 1]
                 next_station = next_event["station"]
-                buffer_load = exit_event["state"][next_station]["B"][exit_type]
+                buffer_load = 0
+                for type_ in types[exit_family]:
+                    if type_ in exit_event["state"][next_station]["B"].keys():
+                        buffer_load += exit_event["state"][next_station]["B"][type_]
                 buffer_capacity = (
-                    model.nodes[next_station]["buffer_capacities"][exit_type]
+                    model.nodes[next_station]["buffer_capacities"][exit_family]
                 )
                 if buffer_load >= buffer_capacity:
                     max_delay = config["model"]["delays"]["release"]
@@ -1604,7 +1633,10 @@ def _mine_processing_times(
                     ):
                         i -= 1
                         event = log.loc[i]
-                        buffer_load = event["state"][next_station]["B"][exit_type]
+                        buffer_load = 0
+                        for type_ in types[exit_family]:
+                            if type_ in event["state"][next_station]["B"].keys():
+                                buffer_load += event["state"][next_station]["B"][type_]
                         if buffer_load >= buffer_capacity:
                             is_blocked = True
                             break

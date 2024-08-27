@@ -721,23 +721,24 @@ def _read_log(
         MATCH (ev:Event)-[:OCCURRED_AT]->(st:Station:Ensemble)
         MATCH (ev)-[:EXECUTED_BY]->(ss:Sensor)
         MATCH (ev)-[:ACTS_ON]->(en:Entity)
-        WHERE {interval[0]} <= ev.timestamp <= {interval[1]}
-        CALL apoc.when (NOT EXISTS{{
-                            MATCH (en)-[:IS_OF_TYPE]->(ent1:EntityType)
-                            MATCH (en)-[:IS_OF_TYPE]->(ent2:EntityType)
-                            WHERE ent1 <> ent2
-                        }},
-                        'MATCH (en)-[:IS_OF_TYPE]->(ent:EntityType)
-                         RETURN ent',
-                        'MATCH (ev0)-[:DF_CONTROL_FLOW_ITEM*0..]->(ev)
-                         MATCH (ev0)-[:ACTS_ON]->(en)
-                         MATCH (ev0)-[:ASSOCIATE_TYPE]->(ent:EntityType)
-                         RETURN toInteger(split(elementId(ev0), \\':\\')[2]) AS id0,
-                                ev0.timestamp as time0, ent
-                         ORDER BY time0 DESC, id0 DESC
-                         LIMIT 1',
-                        {{ev:ev, en:en}}
-             ) YIELD value AS res
+        WHERE ev.simulated IS NULL AND {interval[0]} <= ev.timestamp <= {interval[1]}
+        CALL apoc.when (
+             NOT EXISTS{{
+                 MATCH (en)-[:IS_OF_TYPE]->(ent1:EntityType)
+                 MATCH (en)-[:IS_OF_TYPE]->(ent2:EntityType)
+                 WHERE ent1 <> ent2
+             }},
+             'MATCH (en)-[:IS_OF_TYPE]->(ent:EntityType)
+              RETURN ent',
+             'MATCH (ev0)-[:DF_CONTROL_FLOW_ITEM*0..]->(ev)
+              MATCH (ev0)-[:ACTS_ON]->(en)
+              MATCH (ev0)-[:ASSOCIATE_TYPE]->(ent:EntityType)
+              RETURN toInteger(split(elementId(ev0), \\':\\')[2]) AS id0,
+                     ev0.timestamp as time0, ent
+              ORDER BY time0 DESC, id0 DESC
+              LIMIT 1',
+             {{ev:ev, en:en}}
+        ) YIELD value AS res
         RETURN elementId(ev) AS eid, ev.timestamp AS time, st.sysId AS station,
                st.type AS role, en.sysId AS part, res.ent.familyCode AS family,
                res.ent.code AS type,

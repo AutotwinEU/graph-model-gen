@@ -26,8 +26,6 @@ mpyplot.rcParams["ps.fonttype"] = 42
 ###############################################################################
 # Private constants                                                           #
 ###############################################################################
-
-
 _LIBRARY_FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
 _DEFAULT_CONFIG_PATH = os.path.join(_LIBRARY_FOLDER_PATH, "default.json")
 
@@ -35,8 +33,6 @@ _DEFAULT_CONFIG_PATH = os.path.join(_LIBRARY_FOLDER_PATH, "default.json")
 ###############################################################################
 # Public functions                                                            #
 ###############################################################################
-
-
 def load_config(path: str = None) -> dict[str, Any]:
     """Load configuration from a JSON file.
 
@@ -645,8 +641,6 @@ def show_model(
 ###############################################################################
 # Private functions                                                           #
 ###############################################################################
-
-
 def _deep_copy(source: Any) -> Any:
     """Make a deep copy of a JSON-like object.
 

@@ -6,6 +6,7 @@
         "interval": [0, 30000000]
     },
     "model": {
+        "time_unit": "ms",
         "formula": {
             "ratio": 0.06
         },

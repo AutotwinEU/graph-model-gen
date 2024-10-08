@@ -28,6 +28,9 @@ mpyplot.rcParams["ps.fonttype"] = 42
 ###############################################################################
 _LIBRARY_FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
 _DEFAULT_CONFIG_PATH = os.path.join(_LIBRARY_FOLDER_PATH, "default.json")
+_TIME_UNIT_FACTORS = {
+    "d": 86400.0, "h": 3600.0, "min": 60.0, "s": 1.0, "ms": 1e-3, "us": 1e-6, "ns": 1e-9
+}
 
 
 ###############################################################################
@@ -112,7 +115,7 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     Returns:
         Event log.
     """
-    columns = ["time", "station", "part", "family", "type", "activity"]
+    columns = ["time", "unit", "station", "part", "family", "type", "activity"]
     head = pandas.DataFrame(columns=columns)
     head.loc[-1] = {column: (0.0 if column == "time" else None) for column in columns}
 
@@ -128,6 +131,8 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         path, usecols=lambda c: c in original_columns, dtype=dtypes, na_filter=False
     )
     body.rename(columns=column_mappings, inplace=True)
+    if "unit" not in body.columns:
+        body.insert(body.columns.get_loc("time") + 1, "unit", "")
     if "family" not in body.columns:
         body.insert(body.columns.get_loc("part") + 1, "family", "UNKNOWN")
     if "type" not in body.columns:
@@ -139,13 +144,28 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     body.drop(index=indices_to_drop, inplace=True)
     body.reset_index(drop=True, inplace=True)
     body.replace(to_replace={"activity": activity_mappings}, inplace=True)
+    time_unit = config["model"]["time_unit"]
     if pandas.api.types.is_numeric_dtype(body["time"].dtype):
-        body["time"] = body["time"].map(lambda t: pandas.to_datetime(t, unit="s"))
+        body["unit"] = body["unit"].map(lambda u: u if u != "" else "s")
+        body[["time", "unit"]] = body[["time", "unit"]].apply(
+            lambda r: [
+                r["time"] * (_TIME_UNIT_FACTORS[r["unit"]] / _TIME_UNIT_FACTORS[time_unit]),
+                time_unit,
+            ],
+            axis="columns",
+            result_type="expand",
+        )
     elif pandas.api.types.is_string_dtype(body["time"].dtype):
-        body["time"] = body["time"].map(lambda t: pandas.to_datetime(t))
+        body[["time", "unit"]] = body[["time", "unit"]].apply(
+            lambda r: [
+                pandas.to_datetime(r["time"]).timestamp() / _TIME_UNIT_FACTORS[time_unit],
+                time_unit,
+            ],
+            axis="columns",
+            result_type="expand",
+        )
     else:
         raise RuntimeError("Unsupported time format")
-    body["time"] = body["time"].map(lambda t: t.timestamp())
     body.sort_values(by="time", inplace=True, kind="stable")
 
     log = pandas.concat([head, body])
@@ -163,7 +183,11 @@ def generate_model(log: pandas.DataFrame, config: dict[str, Any]) -> networkx.Di
         Graph model.
     """
     start_time = time.time()
-    model = networkx.DiGraph(name=config["name"], version=config["version"])
+    model = networkx.DiGraph(
+        name=config["name"],
+        version=config["version"],
+        time_unit=config["model"]["time_unit"],
+    )
     station_sublogs, part_sublogs = _extract_sublogs(log)
     _normalize_activities(station_sublogs, part_sublogs, log)
     _mine_topology(model, station_sublogs, part_sublogs, log)
@@ -221,6 +245,7 @@ def show_model(
     """
     name = model.graph["name"]
     version = model.graph["version"]
+    time_unit = model.graph["time_unit"]
     types = model.graph["types"]
 
     stations = list(model.nodes.keys())
@@ -278,7 +303,7 @@ def show_model(
     figure, axes = mpyplot.subplots()
     window_title = "Graph Model"
     figure.canvas.manager.set_window_title(window_title)
-    axes_title = name + " (" + version + ")" if version != "" else name
+    axes_title = name
     axes.set_title(axes_title, fontsize=10.0)
     pos = layout(model)
     cmap = mpyplot.get_cmap("gist_rainbow")
@@ -318,13 +343,36 @@ def show_model(
 
     networkx.draw_networkx_labels(model, pos, font_size=8.0)
 
-    handles = list()
-    labels = list()
+    dummy_handler = mpatches.Rectangle((0.0, 0.0), 0.0, 0.0, fill=False, linewidth=0.0)
+    basic_handles = [dummy_handler, dummy_handler, dummy_handler]
+    basic_labels = ["Name: " + name, "Version: " + version, "Time Unit: " + time_unit]
+    basic_legend = mpyplot.legend(
+        basic_handles,
+        basic_labels,
+        loc="upper left",
+        fontsize=8,
+        handlelength=0.0,
+        handletextpad=0.0,
+        title="Basic Information",
+        title_fontsize=8,
+    )
+    axes.add_artist(basic_legend)
+
+    family_handles = list()
+    family_labels = list()
     for family in types.keys():
         color = family_colors[family]
-        handles.append(mpatches.Rectangle((0.0, 0.0), 0.0, 0.0, color=color))
-        labels.append(family + ": " + ", ".join(types[family]))
-    axes.legend(handles, labels, fontsize=8, title="Family of Types", title_fontsize=8)
+        family_handles.append(mpatches.Rectangle((0.0, 0.0), 0.0, 0.0, color=color))
+        family_labels.append(family + ": " + ", ".join(types[family]))
+    family_legend = mpyplot.legend(
+        family_handles,
+        family_labels,
+        loc="upper right",
+        fontsize=8,
+        title="Family of Types",
+        title_fontsize=8,
+    )
+    axes.add_artist(family_legend)
 
     focus = None
     lock = threading.Lock()
@@ -739,9 +787,14 @@ def _read_log(
               LIMIT 1',
              {{ev:ev, en:en}}
         ) YIELD value AS res
-        RETURN elementId(ev) AS eid, ev.timestamp AS time, st.sysId AS station,
-               st.type AS role, en.sysId AS part, res.ent.familyCode AS family,
-               res.ent.code AS type,
+        RETURN elementId(ev) AS eid, ev.timestamp AS time,
+               CASE
+                    WHEN ev.time_unit IS NOT NULL
+                    THEN ev.time_unit
+                    ELSE ''
+               END AS unit,
+               st.sysId AS station, st.type AS role, en.sysId AS part,
+               res.ent.familyCode AS family, res.ent.code AS type,
                CASE
                     WHEN ss.type IS NOT NULL AND ss.subType IS NOT NULL
                     THEN ss.type + '_' + ss.subType
@@ -790,7 +843,7 @@ def _read_log(
             x += 1
         x += 1
 
-    columns = ["time", "station", "part", "family", "type", "activity"]
+    columns = ["time", "unit", "station", "part", "family", "type", "activity"]
     log = pandas.DataFrame.from_records(data, columns=columns)
     return log
 
@@ -810,6 +863,7 @@ def _write_model(
     """
     model_name = model.graph["name"]
     model_version = model.graph["version"]
+    model_time_unit = model.graph["time_unit"]
     model_types = model.graph["types"]
     model_id = transaction.run(
         f"""
@@ -905,14 +959,15 @@ def _write_model(
             formula_id = transaction.run(
                 f"""
                 CREATE (fm:Entity:Resource:Station:Formula)
-                SET fm.processingTimeMean = {processing_times[x]['mean']},
-                    fm.processingTimeStd = {processing_times[x]['std']},
+                SET fm.processingTimeMean = {processing_times[x]["mean"]},
+                    fm.processingTimeStd = {processing_times[x]["std"]},
                     fm.processingTimeCdfX = {
-                        [point[0] for point in processing_times[x]['cdf']]
+                        [point[0] for point in processing_times[x]["cdf"]]
                     },
                     fm.processingTimeCdfY = {
-                        [point[1] for point in processing_times[x]['cdf']]
-                    }
+                        [point[1] for point in processing_times[x]["cdf"]]
+                    },
+                    fm.processingTimeUnit = '{model_time_unit}'
                 RETURN elementId(fm) AS eid
                 """
             ).data()[0]["eid"]
@@ -970,14 +1025,15 @@ def _write_model(
                 f"""
                 CREATE (rt:Entity:Resource:Connection:Route)
                 SET rt.probability = {routing_probabilities[type_]},
-                    rt.transferTimeMean = {transfer_times[type_]['mean']},
-                    rt.transferTimeStd = {transfer_times[type_]['std']},
+                    rt.transferTimeMean = {transfer_times[type_]["mean"]},
+                    rt.transferTimeStd = {transfer_times[type_]["std"]},
                     rt.transferTimeCdfX = {
-                        [point[0] for point in transfer_times[type_]['cdf']]
+                        [point[0] for point in transfer_times[type_]["cdf"]]
                     },
                     rt.transferTimeCdfY = {
-                        [point[1] for point in transfer_times[type_]['cdf']]
-                    }
+                        [point[1] for point in transfer_times[type_]["cdf"]]
+                    },
+                    rt.transferTimeUnit = '{model_time_unit}'
                 RETURN elementId(rt) AS eid
                 """
             ).data()[0]["eid"]

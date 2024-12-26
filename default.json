@@ -7,7 +7,15 @@
         "username": "neo4j",
         "password": "12345678",
         "database": "neo4j",
-        "interval": [0.0, 0.0]
+        "filters": {
+            "interval": [
+                0.0,
+                0.0
+            ],
+            "station": [],
+            "family": [],
+            "type": []
+        }
     },
     "data": {
         "path": "log.csv",

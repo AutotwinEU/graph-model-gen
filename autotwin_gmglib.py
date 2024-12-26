@@ -755,7 +755,7 @@ def _read_log(
     Returns:
         Event log.
     """
-    interval = list(config["neo4j"]["interval"])
+    interval = list(config["neo4j"]["filters"]["interval"])
     for x in range(len(interval)):
         if isinstance(interval[x], (int, float)):
             pass
@@ -763,30 +763,61 @@ def _read_log(
             interval[x] = "datetime('" + interval[x] + "')"
         else:
             raise RuntimeError("Unsupported time format")
+    stations = config["neo4j"]["filters"]["station"]
+    if len(stations) <= 0:
+        stations = transaction.run(
+            """
+            MATCH (st:Station:Ensemble)
+            RETURN collect(st.sysId) AS stations
+            """
+        ).data()[0]["stations"]
+    families = config["neo4j"]["filters"]["family"]
+    if len(families) <= 0:
+        families = transaction.run(
+            """
+            MATCH (ent:EntityType)
+            RETURN collect(DISTINCT ent.familyCode) AS families
+            """
+        ).data()[0]["families"]
+    types = config["neo4j"]["filters"]["type"]
+    if len(types) <= 0:
+        types = transaction.run(
+            """
+            MATCH (ent:EntityType)
+            RETURN collect(ent.code) AS types
+            """
+        ).data()[0]["types"]
 
-    data = transaction.run(
+    raw_log = transaction.run(
         f"""
-        MATCH (ev:Event)-[:OCCURRED_AT]->(st:Station:Ensemble)
+        MATCH (ev:Event)
+        WHERE ev.simulated IS NULL AND {interval[0]} <= ev.timestamp <= {interval[1]}
+        MATCH (ev)-[:OCCURRED_AT]->(st:Station:Ensemble)
         MATCH (ev)-[:EXECUTED_BY]->(ss:Sensor)
         MATCH (ev)-[:ACTS_ON]->(en:Entity)
-        WHERE ev.simulated IS NULL AND {interval[0]} <= ev.timestamp <= {interval[1]}
-        CALL apoc.when (
-             NOT EXISTS{{
-                 MATCH (en)-[:IS_OF_TYPE]->(ent1:EntityType)
-                 MATCH (en)-[:IS_OF_TYPE]->(ent2:EntityType)
-                 WHERE ent1 <> ent2
-             }},
-             'MATCH (en)-[:IS_OF_TYPE]->(ent:EntityType)
-              RETURN ent',
-             'MATCH (ev0)-[:DF_CONTROL_FLOW_ITEM*0..]->(ev)
-              MATCH (ev0)-[:ACTS_ON]->(en)
-              MATCH (ev0)-[:ASSOCIATE_TYPE]->(ent:EntityType)
-              RETURN toInteger(split(elementId(ev0), \\':\\')[2]) AS id0,
-                     ev0.timestamp as time0, ent
-              ORDER BY time0 DESC, id0 DESC
-              LIMIT 1',
-             {{ev:ev, en:en}}
-        ) YIELD value AS res
+        CALL {{
+             WITH ev, en
+             CALL apoc.when(
+                  NOT EXISTS {{
+                      MATCH (en)-[:IS_OF_TYPE]->(ent1:EntityType)
+                      MATCH (en)-[:IS_OF_TYPE]->(ent2:EntityType)
+                      WHERE ent1 <> ent2
+                  }},
+                  'MATCH (en)-[:IS_OF_TYPE]->(ent:EntityType)
+                   RETURN ent',
+                  'MATCH (ev0)-[:DF_CONTROL_FLOW_ITEM*0..]->(ev)
+                   MATCH (ev0)-[:ACTS_ON]->(en)
+                   MATCH (ev0)-[:ASSOCIATE_TYPE]->(ent:EntityType)
+                   RETURN ent
+                   ORDER BY ev0.timestamp DESC, id(ev0) DESC
+                   LIMIT 1',
+                  {{ev:ev, en:en}}
+             ) YIELD value
+             RETURN value.ent AS ent
+        }}
+        WITH *
+        WHERE st.sysId IN {stations} AND ent.familyCode IN {families}
+              AND ent.code IN {types}
         RETURN elementId(ev) AS eid, ev.timestamp AS time,
                CASE
                     WHEN ev.time_unit IS NOT NULL
@@ -794,7 +825,7 @@ def _read_log(
                     ELSE ''
                END AS unit,
                st.sysId AS station, st.type AS role, en.sysId AS part,
-               res.ent.familyCode AS family, res.ent.code AS type,
+               ent.familyCode AS family, ent.code AS type,
                CASE
                     WHEN ss.type IS NOT NULL AND ss.subType IS NOT NULL
                     THEN ss.type + '_' + ss.subType
@@ -806,45 +837,45 @@ def _read_log(
         """
     ).data()
 
-    for x in range(len(data) - 1):
+    for x in range(len(raw_log) - 1):
         y = x
-        for z in range(x + 1, len(data)):
-            if data[z]["time"] > data[x]["time"]:
+        for z in range(x + 1, len(raw_log)):
+            if raw_log[z]["time"] > raw_log[x]["time"]:
                 break
             has_df_path = transaction.run(
                 f"""
-                MATCH (ev2:Event) WHERE elementId(ev2) = '{data[z]["eid"]}'
-                MATCH (ev1:Event) WHERE elementId(ev1) = '{data[y]["eid"]}'
-                MATCH p = shortestPath((ev2)-[:DF_CONTROL_FLOW_ITEM|DF_SENSOR*]->(ev1))
-                WITH collect(p) AS p
-                RETURN CASE WHEN size(p) <= 0 THEN FALSE ELSE TRUE END AS has_df_path
+                MATCH (ev2:Event) WHERE elementId(ev2) = '{raw_log[z]["eid"]}'
+                MATCH (ev1:Event) WHERE elementId(ev1) = '{raw_log[y]["eid"]}'
+                MATCH pt = shortestPath((ev2)-[:DF_CONTROL_FLOW_ITEM|DF_SENSOR*]->(ev1))
+                WITH collect(pt) AS pt
+                RETURN CASE WHEN size(pt) <= 0 THEN FALSE ELSE TRUE END AS has_df_path
                 """
             ).data()[0]["has_df_path"]
             if has_df_path:
                 y = z
         if y > x:
-            temp = data[x]
-            data[x] = data[y]
-            data[y] = temp
+            temp = raw_log[x]
+            raw_log[x] = raw_log[y]
+            raw_log[y] = temp
 
     x = 0
-    while x < len(data):
-        if data[x]["role"] == "source":
+    while x < len(raw_log):
+        if raw_log[x]["role"] == "source":
             for y in range(x - 1, -1, -1):
-                if data[y]["station"] == data[x]["station"]:
-                    data.insert(y + 1, data[x].copy())
-                    data[y + 1]["time"] = data[y]["time"]
-                    data[y + 1]["activity"] = "ENTER"
+                if raw_log[y]["station"] == raw_log[x]["station"]:
+                    raw_log.insert(y + 1, raw_log[x].copy())
+                    raw_log[y + 1]["time"] = raw_log[y]["time"]
+                    raw_log[y + 1]["activity"] = "ENTER"
                     x += 1
                     break
-        elif data[x]["role"] == "sink":
-            data.insert(x + 1, data[x].copy())
-            data[x + 1]["activity"] = "EXIT"
+        elif raw_log[x]["role"] == "sink":
+            raw_log.insert(x + 1, raw_log[x].copy())
+            raw_log[x + 1]["activity"] = "EXIT"
             x += 1
         x += 1
 
     columns = ["time", "unit", "station", "part", "family", "type", "activity"]
-    log = pandas.DataFrame.from_records(data, columns=columns)
+    log = pandas.DataFrame.from_records(raw_log, columns=columns)
     return log
 
 

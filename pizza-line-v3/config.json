@@ -3,7 +3,12 @@
     "version": "V3",
     "work_path": "pizza-line-v3",
     "neo4j": {
-        "interval": [0, 30000000]
+        "filters": {
+            "interval": [
+                0,
+                30000000
+            ]
+        }
     },
     "model": {
         "time_unit": "ms",

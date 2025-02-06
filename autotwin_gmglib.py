@@ -837,26 +837,35 @@ def _read_log(
         """
     ).data()
 
-    for x in range(len(raw_log) - 1):
-        y = x
-        for z in range(x + 1, len(raw_log)):
-            if raw_log[z]["time"] > raw_log[x]["time"]:
+    x = 0
+    while x < len(raw_log):
+        x_ = x + 1
+        while x_ < len(raw_log):
+            if raw_log[x_]["time"] > raw_log[x]["time"]:
                 break
-            has_df_path = transaction.run(
-                f"""
-                MATCH (ev2:Event) WHERE elementId(ev2) = '{raw_log[z]["eid"]}'
-                MATCH (ev1:Event) WHERE elementId(ev1) = '{raw_log[y]["eid"]}'
-                MATCH pt = shortestPath((ev2)-[:DF_CONTROL_FLOW_ITEM|DF_SENSOR*]->(ev1))
-                WITH collect(pt) AS pt
-                RETURN CASE WHEN size(pt) <= 0 THEN FALSE ELSE TRUE END AS has_df_path
-                """
-            ).data()[0]["has_df_path"]
-            if has_df_path:
-                y = z
-        if y > x:
-            temp = raw_log[x]
-            raw_log[x] = raw_log[y]
-            raw_log[y] = temp
+            x_ += 1
+        for y in range(x, x_):
+            y_ = y
+            for z in range(y + 1, x_):
+                if raw_log[z]["part"] == raw_log[y_]["part"]:
+                    has_dfp = transaction.run(
+                        f"""
+                        MATCH (ev1:Event) WHERE elementId(ev1) = '{raw_log[z]["eid"]}'
+                        MATCH (ev2:Event) WHERE elementId(ev2) = '{raw_log[y_]["eid"]}'
+                        MATCH dfp = shortestPath((ev1)-[:DF_CONTROL_FLOW_ITEM*]->(ev2))
+                        WITH collect(dfp) AS dfps
+                        RETURN CASE WHEN size(dfps) <= 0 THEN FALSE ELSE TRUE END AS has_dfp
+                        """
+                    ).data()[0]["has_dfp"]
+                else:
+                    has_dfp = False
+                if has_dfp:
+                    y_ = z
+            if y_ > y:
+                temp = raw_log[y]
+                raw_log[y] = raw_log[y_]
+                raw_log[y_] = temp
+        x = x_
 
     x = 0
     while x < len(raw_log):

@@ -4,6 +4,7 @@ import json
 import neo4j
 import os
 import pandas
+import datetime
 import time
 import networkx
 import numpy
@@ -28,9 +29,7 @@ mpyplot.rcParams["ps.fonttype"] = 42
 ###############################################################################
 _LIBRARY_FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
 _DEFAULT_CONFIG_PATH = os.path.join(_LIBRARY_FOLDER_PATH, "default.json")
-_TIME_UNIT_FACTORS = {
-    "d": 86400.0, "h": 3600.0, "min": 60.0, "s": 1.0, "ms": 1e-3, "us": 1e-6, "ns": 1e-9
-}
+_TIME_UNIT_FACTORS = {"h": 3600.0, "min": 60.0, "s": 1.0, "ms": 1e-3, "us": 1e-6}
 
 
 ###############################################################################
@@ -84,6 +83,21 @@ def import_log(config: dict[str, Any]):
         log = session.execute_read(lambda t: _read_log(t, config))
         path = os.path.join(config["work_path"], config["data"]["path"])
         log.to_csv(path, index=False)
+
+
+def import_knowledge(config: dict[str, Any]):
+    """Import domain knowledge from a Neo4j database.
+
+    Args:
+        config: Configuration.
+    """
+    uri = config["neo4j"]["uri"]
+    username = config["neo4j"]["username"]
+    password = config["neo4j"]["password"]
+    database = config["neo4j"]["database"]
+    driver = neo4j.GraphDatabase.driver(uri, auth=(username, password))
+    with driver.session(database=database) as session:
+        session.execute_read(lambda t: _read_knowledge(t, config))
 
 
 def export_model(model: networkx.DiGraph, config: dict[str, Any]):
@@ -146,24 +160,42 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     body.replace(to_replace={"activity": activity_mappings}, inplace=True)
     time_unit = config["model"]["time_unit"]
     if pandas.api.types.is_numeric_dtype(body["time"].dtype):
-        body["unit"] = body["unit"].map(lambda u: u if u != "" else "s")
-        body[["time", "unit"]] = body[["time", "unit"]].apply(
-            lambda r: [
-                r["time"] * (_TIME_UNIT_FACTORS[r["unit"]] / _TIME_UNIT_FACTORS[time_unit]),
-                time_unit,
-            ],
-            axis="columns",
-            result_type="expand",
-        )
+        for i in range(len(body)):
+            if body.at[i, "unit"] == "":
+                body.at[i, "unit"] = "s"
+            body.at[i, "time"] *= (
+                _TIME_UNIT_FACTORS[body.at[i, "unit"]] / _TIME_UNIT_FACTORS[time_unit]
+            )
+            body.at[i, "unit"] = time_unit
     elif pandas.api.types.is_string_dtype(body["time"].dtype):
-        body[["time", "unit"]] = body[["time", "unit"]].apply(
-            lambda r: [
-                pandas.to_datetime(r["time"]).timestamp() / _TIME_UNIT_FACTORS[time_unit],
-                time_unit,
-            ],
-            axis="columns",
-            result_type="expand",
-        )
+        workday = config["data"]["workday"]
+        workday_start = datetime.time.fromisoformat(workday["start"])
+        workday_end = datetime.time.fromisoformat(workday["end"])
+        midnight = datetime.time.fromisoformat("00:00")
+        previous_time = None
+        for i in range(len(body)):
+            time_ = pandas.to_datetime(body.at[i, "time"])
+            if workday_start != midnight and time_.time() < workday_start:
+                time_ = time_.normalize().replace(
+                    hour=workday_start.hour, minute=workday_start.minute
+                )
+            if workday_end != midnight and time_.time() > workday_end:
+                time_ = time_.normalize().replace(
+                    hour=workday_end.hour, minute=workday_end.minute
+                )
+            if i <= 0:
+                body.at[0, "time"] = 0.0
+            else:
+                if time_.date() == previous_time.date():
+                    body.at[i, "time"] = body.at[i - 1, "time"] + (
+                        time_.timestamp() - previous_time.timestamp()
+                    ) * (
+                        _TIME_UNIT_FACTORS["s"] / _TIME_UNIT_FACTORS[time_unit]
+                    )
+                else:
+                    body.at[i, "time"] = body.at[i - 1, "time"]
+            body.at[i, "unit"] = time_unit
+            previous_time = time_
     else:
         raise RuntimeError("Unsupported time format")
     body.sort_values(by="time", inplace=True, kind="stable")
@@ -886,6 +918,21 @@ def _read_log(
     columns = ["time", "unit", "station", "part", "family", "type", "activity"]
     log = pandas.DataFrame.from_records(raw_log, columns=columns)
     return log
+
+
+def _read_knowledge(
+    transaction: neo4j.ManagedTransaction,
+    config: dict[str, Any],
+):
+    """Read domain knowledge from an SKG instance.
+
+    Args:
+        transaction: Read transaction.
+        config: Configuration.
+    """
+    skg_global = transaction.run("MATCH (gl:Global) RETURN gl").data()[0]["gl"]
+    config["data"]["workday"]["start"] = skg_global["startOfWorkDay"]
+    config["data"]["workday"]["end"] = skg_global["endOfWorkDay"]
 
 
 def _write_model(

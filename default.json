@@ -35,6 +35,10 @@
                 "EXIT_AP": "EXIT_AP",
                 "EXIT_AR": "EXIT_AR"
             }
+        },
+        "workday": {
+            "start": "00:00",
+            "end": "00:00"
         }
     },
     "model": {

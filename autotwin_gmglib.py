@@ -453,8 +453,12 @@ def show_model(
                 text += get_display_text(attributes["operation"], 1) + "\n"
                 text += "Formulas: "
                 text += get_display_text(attributes["formulas"], 1) + "\n"
+                text += "Buffer Loads: "
+                text += get_display_text(attributes["buffer_loads"], 1) + "\n"
                 text += "Buffer Capacities: "
                 text += get_display_text(attributes["buffer_capacities"], 1) + "\n"
+                text += "Machine Loads: "
+                text += get_display_text(attributes["machine_loads"], 1) + "\n"
                 text += "Machine Capacity: "
                 text += get_display_text(attributes["machine_capacity"], 1) + "\n"
                 text += "Processing Times: "
@@ -985,6 +989,7 @@ def _write_model(
             """
         ).data()[0]["eid"]
 
+        buffer_loads = attributes["buffer_loads"]
         buffer_capacities = attributes["buffer_capacities"]
         for family, capacity in buffer_capacities.items():
             buffer_id = transaction.run(
@@ -994,14 +999,16 @@ def _write_model(
                 RETURN elementId(bf) AS eid
                 """
             ).data()[0]["eid"]
-            for type_ in model_types[family]:
-                transaction.run(
-                    f"""
-                    MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
-                    MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
-                    CREATE (ent)-[:OCCUPIES]->(bf)
-                    """
-                )
+            for type_ in buffer_loads.keys():
+                if type_ in model_types[family]:
+                    transaction.run(
+                        f"""
+                        MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                        MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
+                        CREATE (ent)-[oc:OCCUPIES]->(bf)
+                        SET oc.load = {buffer_loads[type_]}
+                        """
+                    )
             transaction.run(
                 f"""
                 MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
@@ -1017,6 +1024,7 @@ def _write_model(
                 """
             )
 
+        machine_loads = attributes["machine_loads"]
         machine_capacity = attributes["machine_capacity"]
         machine_id = transaction.run(
             f"""
@@ -1025,6 +1033,15 @@ def _write_model(
             RETURN elementId(mc) AS eid
             """
         ).data()[0]["eid"]
+        for type_ in machine_loads.keys():
+            transaction.run(
+                f"""
+                MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                MATCH (mc:Machine) WHERE elementId(mc) = '{machine_id}'
+                CREATE (ent)-[oc:OCCUPIES]->(mc)
+                SET oc.load = {machine_loads[type_]}
+                """
+            )
         transaction.run(
             f"""
             MATCH (mc:Machine) WHERE elementId(mc) = '{machine_id}'
@@ -1272,7 +1289,9 @@ def _mine_topology(
         model.nodes[station]["is_sink"] = model.out_degree(station) <= 0
         model.nodes[station]["operation"] = "ORDINARY"
         model.nodes[station]["formulas"] = list()
+        model.nodes[station]["buffer_loads"] = dict()
         model.nodes[station]["buffer_capacities"] = dict()
+        model.nodes[station]["machine_loads"] = dict()
         model.nodes[station]["machine_capacity"] = 0
         model.nodes[station]["processing_times"] = list()
 
@@ -1625,6 +1644,9 @@ def _reconstruct_states(
                     state[station][location][type_] -= (
                         floor_state[station][location][type_]
                     )
+    for station in model.nodes.keys():
+        model.nodes[station]["buffer_loads"].update(state[station]["B"])
+        model.nodes[station]["machine_loads"].update(state[station]["M"])
 
 
 def _mine_capacities(model: networkx.DiGraph, log: pandas.DataFrame, window: list[int]):

@@ -2,7 +2,7 @@
     "name": "Pizza Line",
     "version": "V4",
     "work_path": "pizza-line-v4",
-    "neo4j": {
+    "data": {
         "filters": {
             "interval": [
                 0,

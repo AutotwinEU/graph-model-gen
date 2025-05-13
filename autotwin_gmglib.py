@@ -787,7 +787,7 @@ def _read_log(
     Returns:
         Event log.
     """
-    interval = list(config["neo4j"]["filters"]["interval"])
+    interval = list(config["data"]["filters"]["interval"])
     for x in range(len(interval)):
         if isinstance(interval[x], (int, float)):
             pass
@@ -795,7 +795,7 @@ def _read_log(
             interval[x] = "datetime('" + interval[x] + "')"
         else:
             raise RuntimeError("Unsupported time format")
-    stations = config["neo4j"]["filters"]["station"]
+    stations = config["data"]["filters"]["station"]
     if len(stations) <= 0:
         stations = transaction.run(
             """
@@ -803,7 +803,7 @@ def _read_log(
             RETURN collect(st.sysId) AS stations
             """
         ).data()[0]["stations"]
-    families = config["neo4j"]["filters"]["family"]
+    families = config["data"]["filters"]["family"]
     if len(families) <= 0:
         families = transaction.run(
             """
@@ -811,7 +811,7 @@ def _read_log(
             RETURN collect(DISTINCT ent.familyCode) AS families
             """
         ).data()[0]["families"]
-    types = config["neo4j"]["filters"]["type"]
+    types = config["data"]["filters"]["type"]
     if len(types) <= 0:
         types = transaction.run(
             """

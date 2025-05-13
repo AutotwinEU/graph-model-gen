@@ -6,7 +6,10 @@
         "uri": "neo4j://localhost:7687",
         "username": "neo4j",
         "password": "12345678",
-        "database": "neo4j",
+        "database": "neo4j"
+    },
+    "data": {
+        "path": "log.csv",
         "filters": {
             "interval": [
                 0.0,
@@ -15,10 +18,7 @@
             "station": [],
             "family": [],
             "type": []
-        }
-    },
-    "data": {
-        "path": "log.csv",
+        },
         "mappings": {
             "column": {
                 "time": "time",

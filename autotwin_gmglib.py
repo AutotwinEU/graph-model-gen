@@ -100,11 +100,16 @@ def import_knowledge(config: dict[str, Any]):
         session.execute_read(lambda t: _read_knowledge(t, config))
 
 
-def export_model(model: networkx.DiGraph, config: dict[str, Any]):
+def export_model(
+    model: networkx.DiGraph,
+    log: pandas.DataFrame,
+    config: dict[str, Any],
+):
     """Export a graph model to a Neo4j database.
 
     Args:
         model: Graph model.
+        log: Event log.
         config: Configuration.
 
     Returns:
@@ -116,7 +121,7 @@ def export_model(model: networkx.DiGraph, config: dict[str, Any]):
     database = config["neo4j"]["database"]
     driver = neo4j.GraphDatabase.driver(uri, auth=(username, password))
     with driver.session(database=database) as session:
-        model_id = session.execute_write(lambda t: _write_model(t, model))
+        model_id = session.execute_write(lambda t: _write_model(t, model, log))
     return model_id
 
 
@@ -151,6 +156,24 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         body.insert(body.columns.get_loc("part") + 1, "family", "UNKNOWN")
     if "type" not in body.columns:
         body.insert(body.columns.get_loc("family") + 1, "type", "UNKNOWN")
+
+    if config["data"]["clustering"]["path"] != "":
+        clustering_path = os.path.join(
+            config["work_path"], config["data"]["clustering"]["path"]
+        )
+        clustering = pandas.read_csv(
+            clustering_path, index_col="part", dtype=str, na_filter=False
+        )
+        indices_to_drop = list()
+        for i in range(len(body)):
+            part = body.at[i, "part"]
+            if part in clustering.index:
+                body.at[i, "family"] = "CLUSTER"
+                body.at[i, "type"] = clustering.at[part, "cluster"]
+            else:
+                indices_to_drop.append(i)
+        body.drop(index=indices_to_drop, inplace=True)
+        body.reset_index(drop=True, inplace=True)
 
     activity_mappings = config["data"]["mappings"]["activity"]
     original_activities = activity_mappings.keys()
@@ -266,8 +289,9 @@ def load_model(config: dict[str, Any]) -> networkx.DiGraph:
 
 def show_model(
     model: networkx.DiGraph,
-    layout: Callable[[networkx.DiGraph], dict[str, numpy.ndarray]]
-    = lambda g: networkx.nx_agraph.graphviz_layout(g, prog="circo"),
+    layout: Callable[[networkx.DiGraph], dict[str, numpy.ndarray]] = (
+        lambda g: networkx.nx_agraph.graphviz_layout(g, prog="circo")
+    ),
 ):
     """Show a graph model in interactive figures.
 
@@ -941,13 +965,15 @@ def _read_knowledge(
 
 def _write_model(
     transaction: neo4j.ManagedTransaction,
-    model: networkx.DiGraph
+    model: networkx.DiGraph,
+    log: pandas.DataFrame,
 ) -> str:
     """Write a graph model to an SKG instance.
 
     Args:
         transaction: Write transaction.
         model: Graph model.
+        log: Event log.
 
     Returns:
         Model ID.
@@ -966,16 +992,43 @@ def _write_model(
     ).data()[0]["eid"]
 
     type_ids = dict()
-    for family in model_types:
-        for type_ in model_types[family]:
-            type_ids[type_] = transaction.run(
-                f"""
-                MATCH (ent:EntityType {{code: '{type_}'}})
-                MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
-                CREATE (ent)-[:PART_OF]->(gm)
-                RETURN elementId(ent) AS eid
-                """
-            ).data()[0]["eid"]
+    for family in model_types.keys():
+        if "CLUSTER" in model_types.keys():
+            for type_ in model_types["CLUSTER"]:
+                type_ids[type_] = transaction.run(
+                    f"""
+                    CREATE (ent:EntityCluster)
+                    SET ent.code = '{type_}',
+                        ent.familyCode = 'CLUSTER'
+                    RETURN elementId(ent) AS eid
+                    """
+                ).data()[0]["eid"]
+                parts = log.loc[log["type"] == type_, "part"]
+                for part in parts:
+                    transaction.run(
+                        f"""
+                        MATCH (en:Entity {{sysId: '{part}'}})
+                        MATCH (ent:EntityCluster) WHERE elementId(ent) = '{type_ids[type_]}'
+                        CREATE (en)-[:BELONGS_TO]->(ent)
+                        """
+                    )
+                transaction.run(
+                    f"""
+                    MATCH (ent:EntityCluster) WHERE elementId(ent) = '{type_ids[type_]}'
+                    MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
+                    CREATE (ent)-[:PART_OF]->(gm)
+                    """
+                )
+        else:
+            for type_ in model_types[family]:
+                type_ids[type_] = transaction.run(
+                    f"""
+                    MATCH (ent:EntityType {{code: '{type_}'}})
+                    MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
+                    CREATE (ent)-[:PART_OF]->(gm)
+                    RETURN elementId(ent) AS eid
+                    """
+                ).data()[0]["eid"]
 
     for station, attributes in model.nodes.items():
         operation = attributes["operation"]
@@ -1003,7 +1056,8 @@ def _write_model(
                 if type_ in model_types[family]:
                     transaction.run(
                         f"""
-                        MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                        MATCH (ent:EntityType|EntityCluster)
+                        WHERE elementId(ent) = '{type_ids[type_]}'
                         MATCH (bf:Buffer) WHERE elementId(bf) = '{buffer_id}'
                         CREATE (ent)-[oc:OCCUPIES]->(bf)
                         SET oc.load = {buffer_loads[type_]}
@@ -1036,7 +1090,8 @@ def _write_model(
         for type_ in machine_loads.keys():
             transaction.run(
                 f"""
-                MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                MATCH (ent:EntityType|EntityCluster)
+                WHERE elementId(ent) = '{type_ids[type_]}'
                 MATCH (mc:Machine) WHERE elementId(mc) = '{machine_id}'
                 CREATE (ent)-[oc:OCCUPIES]->(mc)
                 SET oc.load = {machine_loads[type_]}
@@ -1079,7 +1134,8 @@ def _write_model(
             for type_, cardinality in formulas[x]["input"].items():
                 transaction.run(
                     f"""
-                    MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                    MATCH (ent:EntityType|EntityCluster)
+                    WHERE elementId(ent) = '{type_ids[type_]}'
                     MATCH (fm:Formula) WHERE elementId(fm) = '{formula_id}'
                     CREATE (ent)-[in:INPUT]->(fm)
                     SET in.cardinality = {cardinality}
@@ -1089,7 +1145,8 @@ def _write_model(
                 transaction.run(
                     f"""
                     MATCH (fm:Formula) WHERE elementId(fm) = '{formula_id}'
-                    MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                    MATCH (ent:EntityType|EntityCluster)
+                    WHERE elementId(ent) = '{type_ids[type_]}'
                     CREATE (fm)-[ot:OUTPUT]->(ent)
                     SET ot.cardinality = {cardinality}
                     """
@@ -1143,7 +1200,8 @@ def _write_model(
             ).data()[0]["eid"]
             transaction.run(
                 f"""
-                MATCH (ent:EntityType) WHERE elementId(ent) = '{type_ids[type_]}'
+                MATCH (ent:EntityType|EntityCluster)
+                WHERE elementId(ent) = '{type_ids[type_]}'
                 MATCH (rt:Route) WHERE elementId(rt) = '{route_id}'
                 CREATE (ent)-[:OCCUPIES]->(rt)
                 """

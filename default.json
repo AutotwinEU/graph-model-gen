@@ -10,6 +10,9 @@
     },
     "data": {
         "path": "log.csv",
+        "clustering": {
+            "path": ""
+        },
         "filters": {
             "interval": [
                 0.0,

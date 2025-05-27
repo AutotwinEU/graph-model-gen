@@ -250,7 +250,7 @@ def generate_model(log: pandas.DataFrame, config: dict[str, Any]) -> networkx.Di
     _mine_formulas(model, station_sublogs, part_sublogs, log, config)
     window = [-1, len(log) - 1]
     _reconstruct_states(model, station_sublogs, part_sublogs, log, window)
-    _mine_capacities(model, log, window)
+    _mine_capacities(model, station_sublogs, log, window)
     _mine_processing_times(model, station_sublogs, part_sublogs, log, window, config)
     _mine_transfer_times(model, station_sublogs, part_sublogs, log, window, config)
     _mine_routing_probabilities(model, part_sublogs, window)
@@ -1481,7 +1481,30 @@ def _mine_formulas(
                         enter_event = part_sublog.iloc[j_ - 1]
                         input_type = enter_event["type"]
                         event["input"][input_type] = 1
-        elif operation in {"REPLACE", "ATTACH", "COMPOSE"}:
+        elif operation == "REPLACE":
+            input_type = None
+            for j in range(len(station_sublog)):
+                event = station_sublog.iloc[j]
+                type_ = event["type"]
+                activity = event["activity"]
+                if activity == "ENTER_BP":
+                    input_type = type_
+                elif activity == "EXIT_AP":
+                    if input_type is not None:
+                        event["input"][input_type] = 1
+                        input_type = None
+            output_type = None
+            for j in range(len(station_sublog) - 1, -1, -1):
+                event = station_sublog.iloc[j]
+                type_ = event["type"]
+                activity = event["activity"]
+                if activity == "EXIT_AP":
+                    output_type = type_
+                elif activity == "ENTER_BP":
+                    if output_type is not None:
+                        event["output"][output_type] = 1
+                        output_type = None
+        elif operation in {"ATTACH", "COMPOSE"}:
             input_ = dict()
             for j in range(len(station_sublog)):
                 event = station_sublog.iloc[j]
@@ -1494,27 +1517,27 @@ def _mine_formulas(
                 elif activity == "EXIT_AP":
                     event["input"].update(input_)
                     input_.clear()
-            output = dict()
+            output_type = None
             for j in range(len(station_sublog) - 1, -1, -1):
                 event = station_sublog.iloc[j]
                 type_ = event["type"]
                 activity = event["activity"]
                 if activity == "EXIT_AP":
-                    output.clear()
-                    output[type_] = 1
+                    output_type = type_
                 elif activity == "ENTER_BP":
-                    event["output"].update(output)
+                    if output_type is not None:
+                        event["output"][output_type] = 1
         else:
-            input_ = dict()
-            for j in range(len(station_sublog) - 1, -1, -1):
+            input_type = None
+            for j in range(len(station_sublog)):
                 event = station_sublog.iloc[j]
                 type_ = event["type"]
                 activity = event["activity"]
                 if activity == "ENTER_BP":
-                    input_.clear()
-                    input_[type_] = 1
+                    input_type = type_
                 elif activity == "EXIT_AP":
-                    event["input"].update(input_)
+                    if input_type is not None:
+                        event["input"][input_type] = 1
             output = dict()
             for j in range(len(station_sublog) - 1, -1, -1):
                 event = station_sublog.iloc[j]
@@ -1540,11 +1563,14 @@ def _mine_formulas(
             input_ = event["input"]
             output = event["output"]
             if activity == "ENTER_BP":
-                if operation in {"DETACH", "DECOMPOSE"}:
+                if operation in {"DETACH", "DECOMPOSE"} and len(output) > 0:
                     formula = {"input": {type_: 1}, "output": dict()}
                     formula["output"].update(output)
             elif activity == "EXIT_AP":
-                if operation in {"ORDINARY", "REPLACE", "ATTACH", "COMPOSE"}:
+                if (
+                    operation in {"ORDINARY", "REPLACE", "ATTACH", "COMPOSE"}
+                    and len(input_) > 0
+                ):
                     formula = {"input": dict(), "output": {type_: 1}}
                     formula["input"].update(input_)
 
@@ -1567,11 +1593,7 @@ def _mine_formulas(
                         frequencies[x] += 1
                         formula = None
                         break
-                if (
-                    formula is not None
-                    and len(formula["input"]) > 0
-                    and len(formula["output"]) > 0
-                ):
+                if formula is not None:
                     formulas.append(formula)
                     frequencies.append(1)
                     formula = None
@@ -1586,6 +1608,44 @@ def _mine_formulas(
             indexes.reverse()
             for x in indexes:
                 del formulas[x]
+
+
+def _create_state(
+    model: networkx.DiGraph,
+    station_sublogs: dict[str, pandas.DataFrame],
+) -> dict[str, dict[str, dict[str, int]]]:
+    """Create a new state.
+
+    Args:
+        model: Graph model.
+        station_sublogs: Station sublogs.
+
+    Returns:
+        New state.
+    """
+    state = dict()
+    for station, sublog in station_sublogs.items():
+        operation = model.nodes[station]["operation"]
+        state[station] = dict()
+        state[station]["B"] = dict()
+        state[station]["M"] = dict()
+        for j in range(len(sublog)):
+            event = sublog.iloc[j]
+            type_ = event["type"]
+            activity = event["activity"]
+            if activity == "ENTER_BP":
+                if operation in {"ORDINARY", "REPLACE", "ATTACH", "COMPOSE"}:
+                    state[station]["B"][type_] = 0
+                    state[station]["M"][type_] = 0
+                else:
+                    state[station]["B"][type_] = 0
+            elif activity == "EXIT_AP":
+                if operation in {"DETACH", "DECOMPOSE"}:
+                    state[station]["M"][type_] = 0
+            else:
+                state[station]["B"][type_] = 0
+                state[station]["M"][type_] = 0
+    return state
 
 
 def _reconstruct_states(
@@ -1614,22 +1674,7 @@ def _reconstruct_states(
             if i < window[1]:
                 window[1] = i
 
-    zero_state = dict()
-    for station in model.nodes.keys():
-        zero_state[station] = dict()
-        zero_state[station]["B"] = dict()
-        zero_state[station]["M"] = dict()
-        sublog = station_sublogs[station]
-        for j in range(len(sublog)):
-            event = sublog.iloc[j]
-            type_ = event["type"]
-            activity = event["activity"]
-            if activity.startswith("ENTER"):
-                zero_state[station]["B"][type_] = 0
-                zero_state[station]["M"][type_] = 0
-            else:
-                zero_state[station]["M"][type_] = 0
-
+    zero_state = _create_state(model, station_sublogs)
     log["state"] = None
     for i in range(window[0], window[1]):
         log.at[i, "state"] = _deep_copy(zero_state)
@@ -1640,7 +1685,8 @@ def _reconstruct_states(
         sublog["state"] = None
         sublog.update(log["state"])
 
-    previous_state = log.at[window[0], "state"]
+    initial_state = log.at[window[0], "state"]
+    previous_state = initial_state
     floor_state = _deep_copy(zero_state)
     for i in range(window[0] + 1, window[1]):
         event = log.loc[i]
@@ -1702,20 +1748,30 @@ def _reconstruct_states(
                     state[station][location][type_] -= (
                         floor_state[station][location][type_]
                     )
-    for station in model.nodes.keys():
-        model.nodes[station]["buffer_loads"].update(state[station]["B"])
-        model.nodes[station]["machine_loads"].update(state[station]["M"])
+    if initial_state is None:
+        for station in model.nodes.keys():
+            model.nodes[station]["buffer_loads"].update(zero_state[station]["B"])
+            model.nodes[station]["machine_loads"].update(zero_state[station]["M"])
+    else:
+        for station in model.nodes.keys():
+            model.nodes[station]["buffer_loads"].update(initial_state[station]["B"])
+            model.nodes[station]["machine_loads"].update(initial_state[station]["M"])
 
 
-def _mine_capacities(model: networkx.DiGraph, log: pandas.DataFrame, window: list[int]):
+def _mine_capacities(
+    model: networkx.DiGraph,
+    station_sublogs: dict[str, pandas.DataFrame],
+    log: pandas.DataFrame, window: list[int],
+):
     """Mine buffer and machine capacities at each station.
 
     Args:
         model: Graph model.
+        station_sublogs: Station sublogs.
         log: Event log.
         window: Definite window.
     """
-    state = log.at[window[0], "state"]
+    state = _create_state(model, station_sublogs)
     types = model.graph["types"]
     max_buffer_loads = dict()
     max_machine_loads = dict()

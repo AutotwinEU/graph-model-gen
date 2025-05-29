@@ -11,7 +11,8 @@
     "data": {
         "path": "log.csv",
         "clustering": {
-            "path": ""
+            "path": "",
+            "default": ""
         },
         "filters": {
             "interval": [

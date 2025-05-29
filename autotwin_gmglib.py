@@ -161,17 +161,18 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         clustering_path = os.path.join(
             config["work_path"], config["data"]["clustering"]["path"]
         )
+        clustering_default = config["data"]["clustering"]["default"]
         clustering = pandas.read_csv(
             clustering_path, index_col="part", dtype=str, na_filter=False
         )
-        indices_to_drop = list()
+        body["family"] = "CLUSTER"
         for i in range(len(body)):
             part = body.at[i, "part"]
             if part in clustering.index:
-                body.at[i, "family"] = "CLUSTER"
                 body.at[i, "type"] = clustering.at[part, "cluster"]
             else:
-                indices_to_drop.append(i)
+                body.at[i, "type"] = clustering_default
+        indices_to_drop = body[body["type"] == ""].index
         body.drop(index=indices_to_drop, inplace=True)
         body.reset_index(drop=True, inplace=True)
 
@@ -1003,7 +1004,7 @@ def _write_model(
                     RETURN elementId(ent) AS eid
                     """
                 ).data()[0]["eid"]
-                parts = log.loc[log["type"] == type_, "part"]
+                parts = log.loc[log["type"] == type_, "part"].unique()
                 for part in parts:
                     transaction.run(
                         f"""

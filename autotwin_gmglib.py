@@ -85,8 +85,8 @@ def import_log(config: dict[str, Any]):
         log.to_csv(path, index=False)
 
 
-def import_knowledge(config: dict[str, Any]):
-    """Import domain knowledge from a Neo4j database.
+def import_config(config: dict[str, Any]):
+    """Import configuration from a Neo4j database.
 
     Args:
         config: Configuration.
@@ -97,7 +97,7 @@ def import_knowledge(config: dict[str, Any]):
     database = config["neo4j"]["database"]
     driver = neo4j.GraphDatabase.driver(uri, auth=(username, password))
     with driver.session(database=database) as session:
-        session.execute_read(lambda t: _read_knowledge(t, config))
+        session.execute_read(lambda t: _read_config(t, config))
 
 
 def export_model(
@@ -864,7 +864,6 @@ def _read_log(
         MATCH (ev:Event)
         WHERE ev.simulated IS NULL AND {interval[0]} <= ev.timestamp <= {interval[1]}
         MATCH (ev)-[:OCCURRED_AT]->(st:Station:Ensemble)
-        MATCH (ev)-[:EXECUTED_BY]->(ss:Sensor)
         MATCH (ev)-[:ACTS_ON]->(en:Entity)
         CALL {{
              WITH ev, en
@@ -884,7 +883,9 @@ def _read_log(
                    LIMIT 1',
                   {{ev:ev, en:en}}
              ) YIELD value
-             RETURN value.ent AS ent
+             MATCH (ev)-[:EXECUTED_BY]->(ss:Sensor)
+             RETURN value.ent AS ent, ss
+             LIMIT 1
         }}
         WITH *
         WHERE st.sysId IN {stations} AND ent.familyCode IN {families}
@@ -982,11 +983,11 @@ def _read_log(
     return log
 
 
-def _read_knowledge(
+def _read_config(
     transaction: neo4j.ManagedTransaction,
     config: dict[str, Any],
 ):
-    """Read domain knowledge from an SKG instance.
+    """Read configuration from an SKG instance.
 
     Args:
         transaction: Read transaction.

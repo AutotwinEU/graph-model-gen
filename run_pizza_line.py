@@ -6,7 +6,7 @@ import autotwin_gmglib as gmg
 config_path = os.path.join("pizza-line-v4", "config.json")
 config = gmg.load_config(config_path)
 gmg.import_log(config)
-gmg.import_knowledge(config)
+gmg.import_config(config)
 log = gmg.load_log(config)
 model = gmg.generate_model(log, config)
 gmg.save_model(model, config)

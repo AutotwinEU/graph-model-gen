@@ -134,9 +134,9 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     Returns:
         Event log.
     """
-    columns = ["time", "unit", "station", "part", "family", "type", "activity"]
+    columns = ["time", "unit", "station", "part", "family", "type", "activity", "npt"]
     head = pandas.DataFrame(columns=columns)
-    head.loc[-1] = {column: (0.0 if column == "time" else None) for column in columns}
+    head.loc[-1] = {column: (-1.0 if column == "time" else None) for column in columns}
 
     path = os.path.join(config["work_path"], config["data"]["path"])
     column_mappings = config["data"]["mappings"]["column"]
@@ -156,6 +156,8 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         body.insert(body.columns.get_loc("part") + 1, "family", "UNKNOWN")
     if "type" not in body.columns:
         body.insert(body.columns.get_loc("family") + 1, "type", "UNKNOWN")
+    if "npt" not in body.columns:
+        body.insert(body.columns.get_loc("activity") + 1, "npt", "")
 
     if config["data"]["clustering"]["path"] != "":
         clustering_path = os.path.join(
@@ -183,46 +185,54 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     body.reset_index(drop=True, inplace=True)
     body.replace(to_replace={"activity": activity_mappings}, inplace=True)
     time_unit = config["model"]["time_unit"]
+    body.sort_values(by="time", inplace=True, kind="stable")
     if pandas.api.types.is_numeric_dtype(body["time"].dtype):
         for i in range(len(body)):
-            if body.at[i, "unit"] == "":
-                body.at[i, "unit"] = "s"
-            body.at[i, "time"] *= (
-                _TIME_UNIT_FACTORS[body.at[i, "unit"]] / _TIME_UNIT_FACTORS[time_unit]
-            )
+            time_unit_ = "s" if body.at[i, "unit"] == "" else body.at[i, "unit"]
+            time_ratio = _TIME_UNIT_FACTORS[time_unit_] / _TIME_UNIT_FACTORS[time_unit]
+            body.at[i, "time"] *= time_ratio
             body.at[i, "unit"] = time_unit
     elif pandas.api.types.is_string_dtype(body["time"].dtype):
         workday = config["data"]["workday"]
         workday_start = datetime.time.fromisoformat(workday["start"])
         workday_end = datetime.time.fromisoformat(workday["end"])
         midnight = datetime.time.fromisoformat("00:00")
-        previous_time = None
+        previous_datetime = None
+        time_ = 0.0
+        time_ratio = _TIME_UNIT_FACTORS["s"] / _TIME_UNIT_FACTORS[time_unit]
         for i in range(len(body)):
-            time_ = pandas.to_datetime(body.at[i, "time"])
-            if workday_start != midnight and time_.time() < workday_start:
-                time_ = time_.normalize().replace(
+            datetime_ = pandas.to_datetime(body.at[i, "time"])
+            if workday_start != midnight and datetime_.time() < workday_start:
+                datetime_ = datetime_.normalize().replace(
                     hour=workday_start.hour, minute=workday_start.minute
                 )
-            if workday_end != midnight and time_.time() > workday_end:
-                time_ = time_.normalize().replace(
+            if workday_end != midnight and datetime_.time() > workday_end:
+                datetime_ = datetime_.normalize().replace(
                     hour=workday_end.hour, minute=workday_end.minute
                 )
-            if i <= 0:
-                body.at[0, "time"] = 0.0
-            else:
-                if time_.date() == previous_time.date():
-                    body.at[i, "time"] = body.at[i - 1, "time"] + (
-                        time_.timestamp() - previous_time.timestamp()
-                    ) * (
-                        _TIME_UNIT_FACTORS["s"] / _TIME_UNIT_FACTORS[time_unit]
-                    )
-                else:
-                    body.at[i, "time"] = body.at[i - 1, "time"]
+            if (
+                previous_datetime is not None
+                and datetime_.date() == previous_datetime.date()
+            ):
+                time_ += (
+                    datetime_.timestamp() - previous_datetime.timestamp()
+                ) * time_ratio
+            body.at[i, "time"] = time_
             body.at[i, "unit"] = time_unit
-            previous_time = time_
+            previous_datetime = datetime_
     else:
         raise RuntimeError("Unsupported time format")
-    body.sort_values(by="time", inplace=True, kind="stable")
+    for i in range(len(body)):
+        npt = body.at[i, "npt"]
+        if npt == "":
+            npt = None
+        else:
+            npt = eval(npt.replace("inf", "float('inf')"))
+            time_ratio = _TIME_UNIT_FACTORS[npt["unit"]] / _TIME_UNIT_FACTORS[time_unit]
+            npt["value"] *= time_ratio
+            npt["min"] *= time_ratio
+            npt["max"] *= time_ratio
+        body.at[i, "npt"] = npt
 
     log = pandas.concat([head, body])
     return log
@@ -849,7 +859,7 @@ def _read_log(
             """
         ).data()[0]["types"]
 
-    raw_log = transaction.run(
+    event_records = transaction.run(
         f"""
         MATCH (ev:Event)
         WHERE ev.simulated IS NULL AND {interval[0]} <= ev.timestamp <= {interval[1]}
@@ -899,20 +909,20 @@ def _read_log(
     ).data()
 
     x = 0
-    while x < len(raw_log):
+    while x < len(event_records):
         x_ = x + 1
-        while x_ < len(raw_log):
-            if raw_log[x_]["time"] > raw_log[x]["time"]:
+        while x_ < len(event_records):
+            if event_records[x_]["time"] > event_records[x]["time"]:
                 break
             x_ += 1
         for y in range(x, x_):
             y_ = y
             for z in range(y + 1, x_):
-                if raw_log[z]["part"] == raw_log[y_]["part"]:
+                if event_records[z]["part"] == event_records[y_]["part"]:
                     has_dfp = transaction.run(
                         f"""
-                        MATCH (ev1:Event) WHERE elementId(ev1) = '{raw_log[z]["eid"]}'
-                        MATCH (ev2:Event) WHERE elementId(ev2) = '{raw_log[y_]["eid"]}'
+                        MATCH (ev1:Event) WHERE elementId(ev1) = '{event_records[z]["eid"]}'
+                        MATCH (ev2:Event) WHERE elementId(ev2) = '{event_records[y_]["eid"]}'
                         MATCH dfp = shortestPath((ev1)-[:DF_CONTROL_FLOW_ITEM*]->(ev2))
                         WITH collect(dfp) AS dfps
                         RETURN CASE WHEN size(dfps) <= 0 THEN FALSE ELSE TRUE END AS has_dfp
@@ -923,29 +933,52 @@ def _read_log(
                 if has_dfp:
                     y_ = z
             if y_ > y:
-                temp = raw_log[y]
-                raw_log[y] = raw_log[y_]
-                raw_log[y_] = temp
+                temp = event_records[y]
+                event_records[y] = event_records[y_]
+                event_records[y_] = temp
         x = x_
 
     x = 0
-    while x < len(raw_log):
-        if raw_log[x]["role"] == "source":
+    while x < len(event_records):
+        if event_records[x]["role"] == "source":
             for y in range(x - 1, -1, -1):
-                if raw_log[y]["station"] == raw_log[x]["station"]:
-                    raw_log.insert(y + 1, raw_log[x].copy())
-                    raw_log[y + 1]["time"] = raw_log[y]["time"]
-                    raw_log[y + 1]["activity"] = "ENTER"
+                if event_records[y]["station"] == event_records[x]["station"]:
+                    event_records.insert(y + 1, event_records[x].copy())
+                    event_records[y + 1]["time"] = event_records[y]["time"]
+                    event_records[y + 1]["activity"] = "ENTER"
                     x += 1
                     break
-        elif raw_log[x]["role"] == "sink":
-            raw_log.insert(x + 1, raw_log[x].copy())
-            raw_log[x + 1]["activity"] = "EXIT"
+        elif event_records[x]["role"] == "sink":
+            event_records.insert(x + 1, event_records[x].copy())
+            event_records[x + 1]["activity"] = "EXIT"
             x += 1
         x += 1
 
-    columns = ["time", "unit", "station", "part", "family", "type", "activity"]
-    log = pandas.DataFrame.from_records(raw_log, columns=columns)
+    npt_records = transaction.run(
+        """
+        MATCH (en:Entity)-[:HAS]->(npt:NominalProcessingTime)-[:AT]->(st:Station:Ensemble)
+        RETURN st.sysId AS station, en.sysId AS part, npt{.value, .min, .max, .unit} AS npt
+        """
+    ).data()
+    npts = dict()
+    for npt_record in npt_records:
+        if npt_record["npt"]["min"] is None:
+            npt_record["npt"]["min"] = 0.0
+        if npt_record["npt"]["max"] is None:
+            npt_record["npt"]["max"] = float("inf")
+        if npt_record["npt"]["unit"] is None:
+            npt_record["npt"]["unit"] = "s"
+        pair = (npt_record["station"], npt_record["part"])
+        npts[pair] = npt_record["npt"]
+    for event_record in event_records:
+        pair = (event_record["station"], event_record["part"])
+        if pair in npts.keys():
+            event_record["npt"] = npts[pair]
+        else:
+            event_record["npt"] = None
+
+    columns = ["time", "unit", "station", "part", "family", "type", "activity", "npt"]
+    log = pandas.DataFrame.from_records(event_records, columns=columns)
     return log
 
 
@@ -1847,6 +1880,7 @@ def _mine_processing_times(
             exit_index = -1
             event = station_sublog.iloc[j]
             activity = event["activity"]
+            npt = event["npt"]
             if activity == "ENTER_BP":
                 enter_event = event
                 enter_index = i
@@ -1888,7 +1922,6 @@ def _mine_processing_times(
             ):
                 continue
 
-            sample = float(exit_event["time"] - enter_event["time"])
             is_blocked = False
             if not model.nodes[station]["is_sink"]:
                 exit_part = exit_event["part"]
@@ -1922,7 +1955,13 @@ def _mine_processing_times(
                             is_blocked = True
                             break
 
-            if not is_blocked:
+            if is_blocked:
+                sample = None if npt is None else npt["value"]
+            else:
+                sample = float(exit_event["time"] - enter_event["time"])
+                if npt is not None and (sample < npt["min"] or sample > npt["max"]):
+                    sample = npt["value"]
+            if sample is not None:
                 input_ = exit_event["input"]
                 output = enter_event["output"]
                 for x in range(len(formulas)):

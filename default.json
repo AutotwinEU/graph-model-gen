@@ -31,7 +31,8 @@
                 "part": "part",
                 "family": "family",
                 "type": "type",
-                "activity": "activity"
+                "activity": "activity",
+                "npt": "npt"
             },
             "activity": {
                 "ENTER": "ENTER",

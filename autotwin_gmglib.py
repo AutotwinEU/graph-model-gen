@@ -265,6 +265,7 @@ def generate_model(log: pandas.DataFrame, config: dict[str, Any]) -> networkx.Di
     _mine_processing_times(model, station_sublogs, part_sublogs, log, window, config)
     _mine_transfer_times(model, station_sublogs, part_sublogs, log, window, config)
     _mine_routing_probabilities(model, part_sublogs, window)
+    _reduce_structure(model)
     model.graph["time_spent"] = time.time() - start_time
     return model
 
@@ -2294,3 +2295,24 @@ def _mine_routing_probabilities(
             station_frequency = station_frequencies[connection[0]][type_]
             routing_probability = connection_frequency / station_frequency
             routing_probabilities[type_] = routing_probability
+
+
+def _reduce_structure(model: networkx.DiGraph):
+    """Reduce the structure of the model.
+
+    Args:
+        model: Graph model.
+    """
+    stations = set(model.nodes.keys())
+    for station in stations:
+        formulas = model.nodes[station]["formulas"]
+        processing_times = model.nodes[station]["processing_times"]
+        if len(formulas) <= 0 or len(processing_times) <= 0:
+            model.remove_node(station)
+
+    connections = set(model.edges.keys())
+    for connection in connections:
+        routing_probabilities = model.edges[connection]["routing_probabilities"]
+        transfer_times = model.edges[connection]["transfer_times"]
+        if len(routing_probabilities) <= 0 or len(transfer_times) <= 0:
+            model.remove_edge(*connection)

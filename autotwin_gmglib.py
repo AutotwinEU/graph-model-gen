@@ -922,7 +922,7 @@ def _read_log(
                     THEN ev.time_unit
                     ELSE ''
                END AS unit,
-               st.sysId AS station, st.type AS role, en.sysId AS part,
+               st.sysId AS station, en.sysId AS part,
                ent.familyCode AS family, ent.code AS type,
                CASE
                     WHEN ss.type IS NOT NULL AND ss.subType IS NOT NULL
@@ -965,17 +965,73 @@ def _read_log(
                 event_records[y_] = temp
         x = x_
 
+    source_stations = set()
+    sink_stations = set()
+    part_event_records = dict()
+    for event_record in event_records:
+        station = event_record["station"]
+        part = event_record["part"]
+        source_stations.add(station)
+        sink_stations.add(station)
+        if part not in part_event_records.keys():
+            part_event_records[part] = list()
+        part_event_records[part].append(event_record)
+    for part in part_event_records.keys():
+        previous_station = None
+        for event_record in part_event_records[part]:
+            station = event_record["station"]
+            activity = event_record["activity"]
+            if activity == "ENTER":
+                if previous_station is not None:
+                    source_stations.discard(station)
+                    sink_stations.discard(previous_station)
+                    previous_station = None
+            else:
+                previous_station = station
+
     x = 0
     while x < len(event_records):
-        if event_records[x]["role"] == "source":
+        station = event_records[x]["station"]
+        part = event_records[x]["part"]
+        activity = event_records[x]["activity"]
+        if station in source_stations:
+            if activity.startswith("EXIT"):
+                activity = "EXIT"
+                event_records[x]["activity"] = "EXIT"
+            if activity == "ENTER":
+                del event_records[x]
+                x -= 1
+            else:
+                last_station = part_event_records[part][-1]["station"]
+                if last_station == station:
+                    del event_records[x]
+                    x -= 1
+        if station in sink_stations:
+            if activity.startswith("EXIT"):
+                activity = "EXIT"
+                event_records[x]["activity"] = "EXIT"
+            if activity == "EXIT":
+                del event_records[x]
+                x -= 1
+            else:
+                first_station = part_event_records[part][0]["station"]
+                if first_station == station:
+                    del event_records[x]
+                    x -= 1
+        x += 1
+
+    x = 0
+    while x < len(event_records):
+        station = event_records[x]["station"]
+        if station in source_stations:
             for y in range(x - 1, -1, -1):
-                if event_records[y]["station"] == event_records[x]["station"]:
+                if event_records[y]["station"] == station:
                     event_records.insert(y + 1, event_records[x].copy())
                     event_records[y + 1]["time"] = event_records[y]["time"]
                     event_records[y + 1]["activity"] = "ENTER"
                     x += 1
                     break
-        elif event_records[x]["role"] == "sink":
+        if station in sink_stations:
             event_records.insert(x + 1, event_records[x].copy())
             event_records[x + 1]["activity"] = "EXIT"
             x += 1

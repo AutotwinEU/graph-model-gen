@@ -320,52 +320,78 @@ def show_model(
     for station in stations:
         operation = model.nodes[station]["operation"]
         formulas = model.nodes[station]["formulas"]
-        family = None
-        if operation in {"ORDINARY", "ATTACH"}:
+        station_family = None
+        if operation in {"ORDINARY", "REPLACE", "ATTACH", "COMPOSE"}:
             for formula in formulas:
-                type_ = next(iter(formula["output"].keys()))
-                family_ = None
-                for family_ in types.keys():
-                    if type_ in types[family_]:
+                formula_family = None
+                output_type = next(iter(formula["output"].keys()))
+                output_family = None
+                for family in types.keys():
+                    if output_type in types[family]:
+                        output_family = family
                         break
-                if family is None:
-                    family = family_
+                for input_type in formula["input"].keys():
+                    input_family = None
+                    for family in types.keys():
+                        if input_type in types[family]:
+                            input_family = family
+                            break
+                    if input_family == output_family:
+                        formula_family = output_family
+                        break
+                if station_family is None:
+                    station_family = formula_family
                 else:
-                    if family_ != family:
-                        family = None
-                        break
-        elif operation == "DETACH":
+                    if formula_family != station_family:
+                        station_family = None
+                if station_family is None:
+                    break
+        else:
             for formula in formulas:
-                type_ = next(iter(formula["input"].keys()))
-                family_ = None
-                for family_ in types.keys():
-                    if type_ in types[family_]:
+                formula_family = None
+                input_type = next(iter(formula["input"].keys()))
+                input_family = None
+                for family in types.keys():
+                    if input_type in types[family]:
+                        input_family = family
                         break
-                if family is None:
-                    family = family_
+                for output_type in formula["output"].keys():
+                    output_family = None
+                    for family in types.keys():
+                        if output_type in types[family]:
+                            output_family = family
+                            break
+                    if output_family == input_family:
+                        formula_family = input_family
+                        break
+                if station_family is None:
+                    station_family = formula_family
                 else:
-                    if family_ != family:
-                        family = None
-                        break
-        station_families[station] = family
+                    if formula_family != station_family:
+                        station_family = None
+                if station_family is None:
+                    break
+        station_families[station] = station_family
 
     connections = list(model.edges.keys())
     connection_families = dict()
     for connection in connections:
         routing_probabilities = model.edges[connection]["routing_probabilities"]
-        family = None
-        for type_ in routing_probabilities.keys():
-            family_ = None
-            for family_ in types.keys():
-                if type_ in types[family_]:
+        connection_family = None
+        for routing_type in routing_probabilities.keys():
+            routing_family = None
+            for family in types.keys():
+                if routing_type in types[family]:
+                    routing_family = family
                     break
-            if family is None:
-                family = family_
+            if connection_family is None:
+                connection_family = routing_family
             else:
-                if family_ != family:
-                    family = None
-                    break
-        connection_families[connection] = family
+                if routing_family != connection_family:
+                    connection_family = None
+            if connection_family is None:
+                break
+        connection_families[connection] = connection_family
 
     figure, axes = mpyplot.subplots()
     window_title = "Graph Model"
@@ -385,11 +411,11 @@ def show_model(
 
     paths = list()
     for station in stations:
-        family = station_families[station]
-        if family is None:
+        station_family = station_families[station]
+        if station_family is None:
             color = white
         else:
-            color = family_colors[family]
+            color = family_colors[station_family]
         path = networkx.draw_networkx_nodes(
             model, pos, nodelist=[station], node_color=color, edgecolors=black
         )
@@ -397,11 +423,11 @@ def show_model(
 
     patches = list()
     for connection in connections:
-        family = connection_families[connection]
-        if family is None:
+        connection_family = connection_families[connection]
+        if connection_family is None:
             color = white
         else:
-            color = family_colors[family]
+            color = family_colors[connection_family]
         patch = networkx.draw_networkx_edges(
             model, pos, edgelist=[connection], edge_color=color, arrowsize=20
         )
@@ -1796,7 +1822,8 @@ def _reconstruct_states(
 def _mine_capacities(
     model: networkx.DiGraph,
     station_sublogs: dict[str, pandas.DataFrame],
-    log: pandas.DataFrame, window: list[int],
+    log: pandas.DataFrame,
+    window: list[int],
 ):
     """Mine buffer and machine capacities at each station.
 

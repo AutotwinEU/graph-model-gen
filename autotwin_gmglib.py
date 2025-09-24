@@ -1039,6 +1039,27 @@ def _read_log(
             x += 1
         x += 1
 
+    min_usage = config["data"]["usage"]
+    parts_to_drop = set()
+    for part in part_event_records.keys():
+        event_record = part_event_records[part][-1]
+        station = event_record["station"]
+        activity = event_record["activity"]
+        if station not in sink_stations and activity.startswith("EXIT"):
+            try:
+                x = event_records.index(event_record)
+            except ValueError:
+                x = -1
+            if 0 <= x < len(event_records) * min_usage:
+                parts_to_drop.add(part)
+    x = 0
+    while x < len(event_records):
+        part = event_records[x]["part"]
+        if part in parts_to_drop:
+            del event_records[x]
+            x -= 1
+        x += 1
+
     npt_records = transaction.run(
         """
         MATCH (en:Entity)-[:HAS]->(npt:NominalProcessingTime)-[:AT]->(st:Station:Ensemble)

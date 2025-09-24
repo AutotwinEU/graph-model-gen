@@ -23,6 +23,7 @@
             "family": [],
             "type": []
         },
+        "usage": 0.5,
         "mappings": {
             "column": {
                 "time": "time",

@@ -228,7 +228,8 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
             npt = None
         else:
             npt = eval(npt.replace("inf", "float('inf')"))
-            time_ratio = _TIME_UNIT_FACTORS[npt["unit"]] / _TIME_UNIT_FACTORS[time_unit]
+            time_unit_ = "s" if npt["unit"] == "" else npt["unit"]
+            time_ratio = _TIME_UNIT_FACTORS[time_unit_] / _TIME_UNIT_FACTORS[time_unit]
             npt["value"] *= time_ratio
             npt["min"] *= time_ratio
             npt["max"] *= time_ratio
@@ -1041,23 +1042,26 @@ def _read_log(
     npt_records = transaction.run(
         """
         MATCH (en:Entity)-[:HAS]->(npt:NominalProcessingTime)-[:AT]->(st:Station:Ensemble)
-        RETURN st.sysId AS station, en.sysId AS part, npt{.value, .min, .max, .unit} AS npt
+        RETURN en.sysId AS part, st.sysId AS station, npt{.value, .min, .max, .unit} AS npt
         """
     ).data()
     npts = dict()
     for npt_record in npt_records:
-        if npt_record["npt"]["min"] is None:
-            npt_record["npt"]["min"] = 0.0
-        if npt_record["npt"]["max"] is None:
-            npt_record["npt"]["max"] = float("inf")
-        if npt_record["npt"]["unit"] is None:
-            npt_record["npt"]["unit"] = "s"
-        pair = (npt_record["station"], npt_record["part"])
-        npts[pair] = npt_record["npt"]
+        part = npt_record["part"]
+        station = npt_record["station"]
+        npt = npt_record["npt"]
+        if npt["min"] is None:
+            npt["min"] = 0.0
+        if npt["max"] is None:
+            npt["max"] = float("inf")
+        if npt["unit"] is None:
+            npt["unit"] = ""
+        npts[part, station] = npt
     for event_record in event_records:
-        pair = (event_record["station"], event_record["part"])
-        if pair in npts.keys():
-            event_record["npt"] = npts[pair]
+        station = event_record["station"]
+        part = event_record["part"]
+        if (part, station) in npts.keys():
+            event_record["npt"] = npts[part, station]
         else:
             event_record["npt"] = None
 
@@ -1950,6 +1954,7 @@ def _mine_processing_times(
         config: Configuration.
     """
     types = model.graph["types"]
+    replace_pts = config["model"]["cdf"]["replace_pts"]
     for station, station_sublog in station_sublogs.items():
         formulas = model.nodes[station]["formulas"]
         operation = model.nodes[station]["operation"]
@@ -2041,11 +2046,11 @@ def _mine_processing_times(
                             break
 
             if is_blocked:
-                sample = None if npt is None else npt["value"]
+                sample = npt["value"] if npt is not None and replace_pts else None
             else:
                 sample = float(exit_event["time"] - enter_event["time"])
                 if npt is not None and (sample < npt["min"] or sample > npt["max"]):
-                    sample = npt["value"]
+                    sample = npt["value"] if replace_pts else None
             if sample is not None:
                 input_ = exit_event["input"]
                 output = enter_event["output"]

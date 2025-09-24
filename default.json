@@ -63,6 +63,7 @@
             "release": 0.0
         },
         "cdf": {
+            "replace_pts": false,
             "points": 100
         }
     }

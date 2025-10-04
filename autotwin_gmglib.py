@@ -184,6 +184,7 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     body.drop(index=indices_to_drop, inplace=True)
     body.reset_index(drop=True, inplace=True)
     body.replace(to_replace={"activity": activity_mappings}, inplace=True)
+
     time_unit = config["model"]["time_unit"]
     body.sort_values(by="time", inplace=True, kind="stable")
     if pandas.api.types.is_numeric_dtype(body["time"].dtype):
@@ -222,17 +223,21 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
             previous_datetime = datetime_
     else:
         raise RuntimeError("Unsupported time format")
+
     for i in range(len(body)):
         npt = body.at[i, "npt"]
         if npt == "":
             npt = None
         else:
-            npt = eval(npt.replace("inf", "float('inf')"))
-            time_unit_ = "s" if npt["unit"] == "" else npt["unit"]
+            npt = eval(npt)
+            time_unit_ = "s" if npt["unit"] is None else npt["unit"]
             time_ratio = _TIME_UNIT_FACTORS[time_unit_] / _TIME_UNIT_FACTORS[time_unit]
-            npt["value"] *= time_ratio
-            npt["min"] *= time_ratio
-            npt["max"] *= time_ratio
+            if npt["value"] is not None:
+                npt["value"] *= time_ratio
+            if npt["min"] is not None:
+                npt["min"] *= time_ratio
+            if npt["max"] is not None:
+                npt["max"] *= time_ratio
         body.at[i, "npt"] = npt
 
     log = pandas.concat([head, body])
@@ -1002,11 +1007,13 @@ def _read_log(
                 event_records[x]["activity"] = "EXIT"
             if activity == "ENTER":
                 del event_records[x]
+                del part_event_records[part][0]
                 x -= 1
             else:
                 last_station = part_event_records[part][-1]["station"]
                 if last_station == station:
                     del event_records[x]
+                    del part_event_records[part][-1]
                     x -= 1
         if station in sink_stations:
             if activity.startswith("EXIT"):
@@ -1014,28 +1021,35 @@ def _read_log(
                 event_records[x]["activity"] = "EXIT"
             if activity == "EXIT":
                 del event_records[x]
+                del part_event_records[part][-1]
                 x -= 1
             else:
                 first_station = part_event_records[part][0]["station"]
                 if first_station == station:
                     del event_records[x]
+                    del part_event_records[part][0]
                     x -= 1
+        if len(part_event_records[part]) <= 0:
+            del part_event_records[part]
         x += 1
 
     x = 0
     while x < len(event_records):
         station = event_records[x]["station"]
+        part = event_records[x]["part"]
         if station in source_stations:
             for y in range(x - 1, -1, -1):
                 if event_records[y]["station"] == station:
                     event_records.insert(y + 1, event_records[x].copy())
                     event_records[y + 1]["time"] = event_records[y]["time"]
                     event_records[y + 1]["activity"] = "ENTER"
+                    part_event_records[part].insert(0, event_records[y + 1])
                     x += 1
                     break
         if station in sink_stations:
             event_records.insert(x + 1, event_records[x].copy())
             event_records[x + 1]["activity"] = "EXIT"
+            part_event_records[part].append(event_records[x + 1])
             x += 1
         x += 1
 
@@ -1046,11 +1060,8 @@ def _read_log(
         station = event_record["station"]
         activity = event_record["activity"]
         if station not in sink_stations and activity.startswith("EXIT"):
-            try:
-                x = event_records.index(event_record)
-            except ValueError:
-                x = -1
-            if 0 <= x < len(event_records) * min_usage:
+            x = event_records.index(event_record)
+            if x < len(event_records) * min_usage:
                 parts_to_drop.add(part)
     x = 0
     while x < len(event_records):
@@ -1059,6 +1070,8 @@ def _read_log(
             del event_records[x]
             x -= 1
         x += 1
+    for part in parts_to_drop:
+        del part_event_records[part]
 
     npt_records = transaction.run(
         """
@@ -1070,14 +1083,7 @@ def _read_log(
     for npt_record in npt_records:
         part = npt_record["part"]
         station = npt_record["station"]
-        npt = npt_record["npt"]
-        if npt["min"] is None:
-            npt["min"] = 0.0
-        if npt["max"] is None:
-            npt["max"] = float("inf")
-        if npt["unit"] is None:
-            npt["unit"] = ""
-        npts[part, station] = npt
+        npts[part, station] = npt_record["npt"]
     for event_record in event_records:
         station = event_record["station"]
         part = event_record["part"]
@@ -2070,7 +2076,10 @@ def _mine_processing_times(
                 sample = npt["value"] if npt is not None and replace_pts else None
             else:
                 sample = float(exit_event["time"] - enter_event["time"])
-                if npt is not None and (sample < npt["min"] or sample > npt["max"]):
+                if npt is not None and (
+                    (npt["min"] is not None and sample < npt["min"])
+                    or (npt["max"] is not None and sample > npt["max"])
+                ):
                     sample = npt["value"] if replace_pts else None
             if sample is not None:
                 input_ = exit_event["input"]

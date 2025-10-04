@@ -134,7 +134,9 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
     Returns:
         Event log.
     """
-    columns = ["time", "unit", "station", "part", "family", "type", "activity", "npt"]
+    columns = [
+        "time", "unit", "station", "part", "family", "type", "activity", "npt", "ntt"
+    ]
     head = pandas.DataFrame(columns=columns)
     head.loc[-1] = {column: (-1.0 if column == "time" else None) for column in columns}
 
@@ -158,6 +160,8 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
         body.insert(body.columns.get_loc("family") + 1, "type", "UNKNOWN")
     if "npt" not in body.columns:
         body.insert(body.columns.get_loc("activity") + 1, "npt", "")
+    if "ntt" not in body.columns:
+        body.insert(body.columns.get_loc("npt") + 1, "ntt", "")
 
     if config["data"]["clustering"]["path"] != "":
         clustering_path = os.path.join(
@@ -239,6 +243,20 @@ def load_log(config: dict[str, Any]) -> pandas.DataFrame:
             if npt["max"] is not None:
                 npt["max"] *= time_ratio
         body.at[i, "npt"] = npt
+        ntt = body.at[i, "ntt"]
+        if ntt == "":
+            ntt = None
+        else:
+            ntt = eval(ntt)
+            time_unit_ = "s" if ntt["unit"] is None else ntt["unit"]
+            time_ratio = _TIME_UNIT_FACTORS[time_unit_] / _TIME_UNIT_FACTORS[time_unit]
+            if ntt["value"] is not None:
+                ntt["value"] *= time_ratio
+            if ntt["min"] is not None:
+                ntt["min"] *= time_ratio
+            if ntt["max"] is not None:
+                ntt["max"] *= time_ratio
+        body.at[i, "ntt"] = ntt
 
     log = pandas.concat([head, body])
     return log
@@ -1092,7 +1110,37 @@ def _read_log(
         else:
             event_record["npt"] = None
 
-    columns = ["time", "unit", "station", "part", "family", "type", "activity", "npt"]
+    ntt_records = transaction.run(
+        """
+        MATCH (en:Entity)-[:HAS]->(ntt:NominalTransferTime)-[:ON]->(cn:Connection:Ensemble)
+        MATCH (st1:Station:Ensemble)-[:ORIGIN]->(cn)-[:DESTINATION]->(st2:Station:Ensemble)
+        RETURN en.sysId AS part, st1.sysId AS origin, st2.sysId AS destination,
+               ntt{.value, .min, .max, .unit} AS ntt
+        """
+    ).data()
+    ntts = dict()
+    for ntt_record in ntt_records:
+        part = ntt_record["part"]
+        origin = ntt_record["origin"]
+        destination = ntt_record["destination"]
+        connection = (origin, destination)
+        ntts[part, connection] = ntt_record["ntt"]
+    for part in part_event_records.keys():
+        previous_event_record = None
+        for event_record in part_event_records[part]:
+            station = event_record["station"]
+            activity = event_record["activity"]
+            if activity == "ENTER" and previous_event_record is not None:
+                previous_station = previous_event_record["station"]
+                connection = (previous_station, station)
+                if (part, connection) in ntts.keys():
+                    previous_event_record["ntt"] = ntts[part, connection]
+                    event_record["ntt"] = ntts[part, connection]
+            previous_event_record = event_record
+
+    columns = [
+        "time", "unit", "station", "part", "family", "type", "activity", "npt", "ntt"
+    ]
     log = pandas.DataFrame.from_records(event_records, columns=columns)
     return log
 
@@ -1319,9 +1367,9 @@ def _write_model(
     for connection, attributes in model.edges.items():
         connection_id = transaction.run(
             f"""
-            MATCH (st1:Station:Ensemble {{sysId: '{connection[0]}'}})
+            MATCH (:Station:Ensemble {{sysId: '{connection[0]}'}})
                   -[:ORIGIN]->(cn:Connection:Ensemble)-[:DESTINATION]->
-                  (st:Station:Ensemble {{sysId: '{connection[1]}'}})
+                  (:Station:Ensemble {{sysId: '{connection[1]}'}})
             MATCH (gm:GraphModel) WHERE elementId(gm) = '{model_id}'
             CREATE (cn)-[:PART_OF]->(gm)
             RETURN elementId(cn) AS eid
@@ -2127,6 +2175,7 @@ def _mine_transfer_times(
         window: Definite window.
         config: Configuration.
     """
+    replace_tts = config["model"]["cdf"]["replace_tts"]
     connections = model.edges.keys()
     samples = {connection: dict() for connection in connections}
     for part_sublog in part_sublogs.values():
@@ -2141,6 +2190,7 @@ def _mine_transfer_times(
             exit_index = -1
             event = part_sublog.iloc[j]
             activity = event["activity"]
+            ntt = event["ntt"]
             if activity.startswith("ENTER"):
                 enter_event = event
                 enter_index = i
@@ -2163,7 +2213,6 @@ def _mine_transfer_times(
             if type_ not in samples[connection].keys():
                 samples[connection][type_] = list()
 
-            sample = float(enter_event["time"] - exit_event["time"])
             is_queued = False
             operation = model.nodes[enter_station]["operation"]
             max_delay = config["model"]["delays"]["seize"]
@@ -2200,7 +2249,16 @@ def _mine_transfer_times(
                         is_queued = True
                         break
 
-            if not is_queued:
+            if is_queued:
+                sample = ntt["value"] if ntt is not None and replace_tts else None
+            else:
+                sample = float(enter_event["time"] - exit_event["time"])
+                if ntt is not None and (
+                    (ntt["min"] is not None and sample < ntt["min"])
+                    or (ntt["max"] is not None and sample > ntt["max"])
+                ):
+                    sample = ntt["value"] if replace_tts else None
+            if sample is not None:
                 samples[connection][type_].append(sample)
 
     for connection in connections:

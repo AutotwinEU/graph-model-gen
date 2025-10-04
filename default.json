@@ -65,6 +65,7 @@
         },
         "cdf": {
             "replace_pts": false,
+            "replace_tts": false,
             "points": 100
         }
     }

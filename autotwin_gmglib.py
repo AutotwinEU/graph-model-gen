@@ -1019,7 +1019,11 @@ def _read_log(
         station = event_records[x]["station"]
         part = event_records[x]["part"]
         activity = event_records[x]["activity"]
-        if station in source_stations:
+        if station in source_stations and station in sink_stations:
+            del event_records[x]
+            del part_event_records[part][0]
+            x -= 1
+        elif station in source_stations and station not in sink_stations:
             if activity.startswith("EXIT"):
                 activity = "EXIT"
                 event_records[x]["activity"] = "EXIT"
@@ -1033,7 +1037,7 @@ def _read_log(
                     del event_records[x]
                     del part_event_records[part][-1]
                     x -= 1
-        if station in sink_stations:
+        elif station not in source_stations and station in sink_stations:
             if activity.startswith("EXIT"):
                 activity = "EXIT"
                 event_records[x]["activity"] = "EXIT"
